@@ -25,5 +25,7 @@
   ],
   "env": {
     "NODE_ENV": "production"
-  }
+  },
+  "buildCommand": "cd client && npm install && npm run build",
+  "outputDirectory": "client/build"
 }
