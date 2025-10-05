@@ -66,6 +66,13 @@ const Analytics = () => {
   };
 
   const handleUrlClick = async (urlData) => {
+    // If clicking on the same URL that's already selected, close it
+    if (selectedUrl && selectedUrl.shortUrl === urlData.shortUrl) {
+      setSelectedUrl(null);
+      setAnalytics(null);
+      return;
+    }
+    
     setSelectedUrl(urlData);
     setLoading(true);
     setError('');
@@ -205,16 +212,35 @@ const Analytics = () => {
       {/* Detailed Analytics */}
       {selectedUrl && (
         <div style={{ borderTop: '2px solid #1976d2', paddingTop: '20px' }}>
-          <h3>📈 Detailed Analytics for 
-            <a 
-              href={`${config.SHORT_URL_BASE}/${selectedUrl.shortUrl}`}
-              target="_blank" 
-              rel="noopener noreferrer" 
-              style={{ marginLeft: '5px', color: '#000000' }}
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '20px' }}>
+            <h3 style={{ margin: 0 }}>📈 Detailed Analytics for 
+              <a 
+                href={`${config.SHORT_URL_BASE}/${selectedUrl.shortUrl}`}
+                target="_blank" 
+                rel="noopener noreferrer" 
+                style={{ marginLeft: '5px', color: '#000000' }}
+              >
+                {config.SHORT_URL_BASE ? `${config.SHORT_URL_BASE}/${selectedUrl.shortUrl}` : `/${selectedUrl.shortUrl}`}
+              </a>
+            </h3>
+            <button 
+              onClick={() => setSelectedUrl(null)}
+              style={{
+                padding: '8px 16px',
+                backgroundColor: '#dc3545',
+                color: 'white',
+                border: 'none',
+                borderRadius: '5px',
+                cursor: 'pointer',
+                fontSize: '14px',
+                fontWeight: 'bold'
+              }}
+              onMouseEnter={(e) => e.target.style.backgroundColor = '#c82333'}
+              onMouseLeave={(e) => e.target.style.backgroundColor = '#dc3545'}
             >
-              {config.SHORT_URL_BASE ? `${config.SHORT_URL_BASE}/${selectedUrl.shortUrl}` : `/${selectedUrl.shortUrl}`}
-            </a>
-          </h3>
+              ✕ Close
+            </button>
+          </div>
           
           {loading && <p>Loading analytics...</p>}
           
