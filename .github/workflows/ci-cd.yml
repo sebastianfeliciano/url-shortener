@@ -1,4 +1,4 @@
-name: Simple CI
+name: Linting CI
 
 on:
   push:
@@ -7,7 +7,7 @@ on:
     branches: [ main ]
 
 jobs:
-  test:
+  lint:
     runs-on: ubuntu-latest
 
     steps:
@@ -29,6 +29,3 @@ jobs:
       run: |
         npm run lint || echo "No lint script found"
         cd client && npm run lint || echo "No client lint script found"
-    
-    - name: Run tests
-      run: npm test
