@@ -11,7 +11,28 @@ require('dotenv').config();
 
 const app = express();
 const PORT = process.env.PORT || 5000;
-const BASE_URL = process.env.BASE_URL || `http://localhost:${PORT}`;
+
+// Auto-detect IP address
+function getLocalIP() {
+  const os = require('os');
+  const interfaces = os.networkInterfaces();
+  
+  for (const name of Object.keys(interfaces)) {
+    for (const iface of interfaces[name]) {
+      // Skip internal (loopback) addresses and non-IPv4 addresses
+      if (iface.family === 'IPv4' && !iface.internal) {
+        return iface.address;
+      }
+    }
+  }
+  return 'localhost';
+}
+
+const LOCAL_IP = getLocalIP();
+const BASE_URL = process.env.BASE_URL || `http://${LOCAL_IP}:${PORT}`;
+
+// Log the detected IP for reference
+console.log('Server running on:', BASE_URL);
 
 // Security middleware
 app.use(helmet());
@@ -304,12 +325,8 @@ if (process.env.NODE_ENV === 'production') {
   });
 }
 
-// For Vercel deployment
-if (process.env.NODE_ENV === 'production') {
-  module.exports = app;
-} else {
-  app.listen(PORT, () => {
-    console.log(`Server running on port ${PORT}`);
-    console.log(`Environment: ${process.env.NODE_ENV || 'development'}`);
-  });
-}
+// Start the server
+app.listen(PORT, () => {
+  console.log(`Server running on port ${PORT}`);
+  console.log(`Environment: ${process.env.NODE_ENV || 'development'}`);
+});
