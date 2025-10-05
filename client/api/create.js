@@ -1,26 +1,16 @@
-const mongoose = require('mongoose');
+const { MongoClient, ServerApiVersion } = require('mongodb');
 const { nanoid } = require('nanoid');
 const QRCode = require('qrcode');
 
-// MongoDB connection
-const MONGODB_URI = 'mongodb+srv://snfelexstudents2025_db_user:9vvR5qZVJGqWJ0Vt@cluster0.frj5vmg.mongodb.net/urlshortener?retryWrites=true&w=majority&appName=Cluster0';
+const uri = "mongodb+srv://snfelexstudents2025_db_user:9vvR5qZVJGqWJ0Vt@cluster0.frj5vmg.mongodb.net/?retryWrites=true&w=majority&appName=Cluster0";
 
-mongoose.connect(MONGODB_URI, {
-  useNewUrlParser: true,
-  useUnifiedTopology: true,
+const client = new MongoClient(uri, {
+  serverApi: {
+    version: ServerApiVersion.v1,
+    strict: true,
+    deprecationErrors: true,
+  }
 });
-
-// URL Schema
-const urlSchema = new mongoose.Schema({
-  shortUrl: { type: String, required: true, unique: true },
-  longUrl: { type: String, required: true },
-  createdAt: { type: Date, default: Date.now },
-  clickCount: { type: Number, default: 0 },
-  lastAccessed: { type: Date },
-  qrCode: { type: String }
-});
-
-const Url = mongoose.model('Url', urlSchema);
 
 // Generate short URL
 function generateShortUrl() {
@@ -67,8 +57,12 @@ module.exports = async function handler(req, res) {
       return res.status(400).json({ error: 'Invalid URL format' });
     }
 
+    await client.connect();
+    const db = client.db('urlshortener');
+    const collection = db.collection('urls');
+
     // Check if URL already exists
-    let existingUrl = await Url.findOne({ longUrl });
+    const existingUrl = await collection.findOne({ longUrl });
     if (existingUrl) {
       return res.status(201).json({
         shortUrl: existingUrl.shortUrl,
@@ -83,24 +77,26 @@ module.exports = async function handler(req, res) {
     let isUnique = false;
     while (!isUnique) {
       shortUrl = generateShortUrl();
-      const exists = await Url.findOne({ shortUrl });
+      const exists = await collection.findOne({ shortUrl });
       if (!exists) {
         isUnique = true;
       }
     }
 
     // Generate QR code
-    const baseUrl = process.env.VERCEL_URL ? `https://${process.env.VERCEL_URL}` : 'http://localhost:5001';
+    const baseUrl = 'https://urs-mauve.vercel.app';
     const qrCodeDataURL = await QRCode.toDataURL(`${baseUrl}/${shortUrl}`);
 
     // Save to database
-    const newUrl = new Url({
+    const newUrl = {
       shortUrl,
       longUrl,
-      qrCode: qrCodeDataURL
-    });
+      qrCode: qrCodeDataURL,
+      clickCount: 0,
+      createdAt: new Date()
+    };
 
-    await newUrl.save();
+    await collection.insertOne(newUrl);
 
     res.status(201).json({
       shortUrl,
@@ -112,5 +108,7 @@ module.exports = async function handler(req, res) {
   } catch (error) {
     console.error('Error creating short URL:', error);
     res.status(500).json({ error: 'Internal server error' });
+  } finally {
+    await client.close();
   }
 }

@@ -1,35 +1,14 @@
-const mongoose = require('mongoose');
+const { MongoClient, ServerApiVersion } = require('mongodb');
 
-// MongoDB connection
-const MONGODB_URI = 'mongodb+srv://snfelexstudents2025_db_user:9vvR5qZVJGqWJ0Vt@cluster0.frj5vmg.mongodb.net/urlshortener?retryWrites=true&w=majority&appName=Cluster0';
+const uri = "mongodb+srv://snfelexstudents2025_db_user:9vvR5qZVJGqWJ0Vt@cluster0.frj5vmg.mongodb.net/?retryWrites=true&w=majority&appName=Cluster0";
 
-mongoose.connect(MONGODB_URI, {
-  useNewUrlParser: true,
-  useUnifiedTopology: true,
+const client = new MongoClient(uri, {
+  serverApi: {
+    version: ServerApiVersion.v1,
+    strict: true,
+    deprecationErrors: true,
+  }
 });
-
-// URL Schema
-const urlSchema = new mongoose.Schema({
-  shortUrl: { type: String, required: true, unique: true },
-  longUrl: { type: String, required: true },
-  createdAt: { type: Date, default: Date.now },
-  clickCount: { type: Number, default: 0 },
-  lastAccessed: { type: Date },
-  qrCode: { type: String }
-});
-
-const Url = mongoose.model('Url', urlSchema);
-
-// Analytics Schema
-const analyticsSchema = new mongoose.Schema({
-  shortUrl: { type: String, required: true },
-  timestamp: { type: Date, default: Date.now },
-  ip: { type: String },
-  userAgent: { type: String },
-  redirectTime: { type: Number } // in milliseconds
-});
-
-const Analytics = mongoose.model('Analytics', analyticsSchema);
 
 module.exports = async function handler(req, res) {
   if (req.method !== 'GET') {
@@ -49,8 +28,13 @@ module.exports = async function handler(req, res) {
       });
     }
 
+    await client.connect();
+    const db = client.db('urlshortener');
+    const urlsCollection = db.collection('urls');
+    const analyticsCollection = db.collection('analytics');
+
     // Find the URL in database
-    const url = await Url.findOne({ shortUrl });
+    const url = await urlsCollection.findOne({ shortUrl });
     if (!url) {
       return res.status(404).json({ 
         error: 'Short URL not found',
@@ -62,16 +46,17 @@ module.exports = async function handler(req, res) {
     const redirectTime = Date.now() - startTime;
 
     // Update analytics
-    const analytics = new Analytics({
+    const analytics = {
       shortUrl,
       ip: req.headers['x-forwarded-for'] || req.connection.remoteAddress,
       userAgent: req.headers['user-agent'],
-      redirectTime
-    });
-    await analytics.save();
+      redirectTime,
+      timestamp: new Date()
+    };
+    await analyticsCollection.insertOne(analytics);
 
     // Update click count
-    await Url.updateOne(
+    await urlsCollection.updateOne(
       { shortUrl },
       { 
         $inc: { clickCount: 1 },
@@ -85,5 +70,7 @@ module.exports = async function handler(req, res) {
   } catch (error) {
     console.error('Error redirecting:', error);
     res.status(500).json({ error: 'Internal server error' });
+  } finally {
+    await client.close();
   }
 }
