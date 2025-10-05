@@ -3,7 +3,9 @@ const { nanoid } = require('nanoid');
 const QRCode = require('qrcode');
 
 // MongoDB connection
-mongoose.connect(process.env.MONGODB_URI || 'mongodb://localhost:27017/urlshortener', {
+const MONGODB_URI = 'mongodb+srv://snfelexstudents2025_db_user:9vvR5qZVJGqWJ0Vt@cluster0.frj5vmg.mongodb.net/urlshortener?retryWrites=true&w=majority&appName=Cluster0';
+
+mongoose.connect(MONGODB_URI, {
   useNewUrlParser: true,
   useUnifiedTopology: true,
 });
