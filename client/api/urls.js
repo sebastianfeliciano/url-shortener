@@ -30,9 +30,13 @@ module.exports = async function handler(req, res) {
   }
 
   try {
+    console.log('Starting MongoDB connection...');
     await client.connect();
+    console.log('Connected to MongoDB');
+    
     const db = client.db('urlshortener');
     const collection = db.collection('urls');
+    console.log('Accessing urls collection');
     
     const urls = await collection.find({}, {
       projection: { shortUrl: 1, longUrl: 1, clickCount: 1, createdAt: 1, lastAccessed: 1 }
@@ -41,12 +45,23 @@ module.exports = async function handler(req, res) {
     .limit(100)
     .toArray();
 
+    console.log('Found', urls.length, 'URLs');
     res.status(200).json(urls);
 
   } catch (error) {
     console.error('Error fetching URLs:', error);
-    res.status(500).json({ error: 'Internal server error' });
+    console.error('Error details:', error.message);
+    res.status(500).json({ 
+      error: 'Internal server error',
+      details: error.message,
+      timestamp: new Date().toISOString()
+    });
   } finally {
-    await client.close();
+    try {
+      await client.close();
+      console.log('MongoDB connection closed');
+    } catch (closeError) {
+      console.error('Error closing connection:', closeError);
+    }
   }
 }
