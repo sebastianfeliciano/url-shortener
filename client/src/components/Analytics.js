@@ -219,54 +219,234 @@ const Analytics = () => {
           {loading && <p>Loading analytics...</p>}
           
           {analytics && (
-            <div className="analytics-grid">
-              <div className="analytics-card">
-                <h4>🔗 URL Information</h4>
-                <p><strong>Short URL:</strong> 
-                  <a 
-                    href={`${config.SHORT_URL_BASE}/${analytics.shortUrl}`}
-                    target="_blank" 
-                    rel="noopener noreferrer" 
-                    style={{ marginLeft: '5px', color: '#1976d2' }}
-                  >
-                    {config.SHORT_URL_BASE ? `${config.SHORT_URL_BASE}/${analytics.shortUrl}` : `/${analytics.shortUrl}`}
-                  </a>
-                </p>
-                <p><strong>Long URL:</strong> 
-                  <a href={analytics.longUrl} target="_blank" rel="noopener noreferrer" style={{ marginLeft: '5px', color: '#1976d2' }}>
-                    {analytics.longUrl}
-                  </a>
-                </p>
-                <p><strong>Created:</strong> {formatDate(analytics.createdAt)}</p>
-                <p><strong>Last Accessed:</strong> {analytics.lastAccessed ? formatDate(analytics.lastAccessed) : 'Never'}</p>
+            <div style={{ 
+              display: 'grid', 
+              gridTemplateColumns: '1fr 1fr', 
+              gap: '20px',
+              backgroundColor: '#f8f9fa',
+              padding: '20px',
+              borderRadius: '10px',
+              border: '1px solid #dee2e6'
+            }}>
+              <div style={{ 
+                backgroundColor: 'white', 
+                padding: '20px', 
+                borderRadius: '8px',
+                border: '1px solid #e9ecef',
+                boxShadow: '0 2px 4px rgba(0,0,0,0.1)'
+              }}>
+                <h4 style={{ color: '#1976d2', marginBottom: '15px', fontSize: '18px' }}>🔗 URL Information</h4>
+                <div style={{ marginBottom: '10px' }}>
+                  <strong style={{ color: '#495057' }}>Short URL:</strong>
+                  <div style={{ 
+                    marginTop: '5px',
+                    padding: '8px',
+                    backgroundColor: '#e3f2fd',
+                    borderRadius: '4px',
+                    border: '1px solid #1976d2'
+                  }}>
+                    <a 
+                      href={`${config.SHORT_URL_BASE}/${analytics.shortUrl}`}
+                      target="_blank" 
+                      rel="noopener noreferrer" 
+                      style={{ color: '#1976d2', textDecoration: 'none', fontWeight: 'bold' }}
+                    >
+                      {config.SHORT_URL_BASE ? `${config.SHORT_URL_BASE}/${analytics.shortUrl}` : `/${analytics.shortUrl}`}
+                    </a>
+                  </div>
+                </div>
+                <div style={{ marginBottom: '10px' }}>
+                  <strong style={{ color: '#495057' }}>Long URL:</strong>
+                  <div style={{ 
+                    marginTop: '5px',
+                    padding: '8px',
+                    backgroundColor: '#f8f9fa',
+                    borderRadius: '4px',
+                    border: '1px solid #dee2e6',
+                    wordBreak: 'break-all',
+                    fontSize: '14px'
+                  }}>
+                    <a href={analytics.longUrl} target="_blank" rel="noopener noreferrer" style={{ color: '#1976d2', textDecoration: 'none' }}>
+                      {analytics.longUrl}
+                    </a>
+                  </div>
+                </div>
+                <div style={{ marginBottom: '8px' }}>
+                  <strong style={{ color: '#495057' }}>Created:</strong> 
+                  <span style={{ marginLeft: '5px', color: '#6c757d' }}>{formatDate(analytics.createdAt)}</span>
+                </div>
+                <div>
+                  <strong style={{ color: '#495057' }}>Last Accessed:</strong> 
+                  <span style={{ marginLeft: '5px', color: '#6c757d' }}>
+                    {analytics.lastAccessed ? formatDate(analytics.lastAccessed) : 'Never'}
+                  </span>
+                </div>
               </div>
 
-              <div className="analytics-card">
-                <h4>📊 Click Statistics</h4>
-                <p><strong>Total Clicks:</strong> {analytics.totalClicks}</p>
-                <p><strong>Average Redirect Time:</strong> {analytics.avgRedirectTime}ms</p>
+              <div style={{ 
+                backgroundColor: 'white', 
+                padding: '20px', 
+                borderRadius: '8px',
+                border: '1px solid #e9ecef',
+                boxShadow: '0 2px 4px rgba(0,0,0,0.1)'
+              }}>
+                <h4 style={{ color: '#28a745', marginBottom: '15px', fontSize: '18px' }}>📊 Click Statistics</h4>
+                <div style={{ marginBottom: '15px' }}>
+                  <div style={{ 
+                    display: 'flex', 
+                    alignItems: 'center', 
+                    justifyContent: 'space-between',
+                    padding: '10px',
+                    backgroundColor: analytics.totalClicks > 0 ? '#d4edda' : '#f8d7da',
+                    borderRadius: '6px',
+                    border: `1px solid ${analytics.totalClicks > 0 ? '#c3e6cb' : '#f5c6cb'}`
+                  }}>
+                    <span style={{ fontWeight: 'bold', color: '#495057' }}>Total Clicks:</span>
+                    <span style={{ 
+                      fontSize: '24px', 
+                      fontWeight: 'bold',
+                      color: analytics.totalClicks > 0 ? '#155724' : '#721c24'
+                    }}>
+                      {analytics.totalClicks}
+                    </span>
+                  </div>
+                </div>
+                <div>
+                  <div style={{ 
+                    display: 'flex', 
+                    alignItems: 'center', 
+                    justifyContent: 'space-between',
+                    padding: '10px',
+                    backgroundColor: '#e2e3e5',
+                    borderRadius: '6px',
+                    border: '1px solid #d6d8db'
+                  }}>
+                    <span style={{ fontWeight: 'bold', color: '#495057' }}>Avg Redirect Time:</span>
+                    <span style={{ fontSize: '18px', fontWeight: 'bold', color: '#495057' }}>
+                      {analytics.avgRedirectTime}ms
+                    </span>
+                  </div>
+                </div>
+              </div>
+
+              {/* QR Code Section */}
+              <div style={{ 
+                gridColumn: '1 / -1',
+                backgroundColor: 'white', 
+                padding: '20px', 
+                borderRadius: '8px',
+                border: '1px solid #e9ecef',
+                boxShadow: '0 2px 4px rgba(0,0,0,0.1)',
+                textAlign: 'center'
+              }}>
+                <h4 style={{ color: '#6f42c1', marginBottom: '15px', fontSize: '18px' }}>📱 QR Code</h4>
+                <div style={{ 
+                  display: 'inline-block',
+                  padding: '15px',
+                  backgroundColor: '#f8f9fa',
+                  borderRadius: '8px',
+                  border: '2px solid #6f42c1'
+                }}>
+                  <img 
+                    src={`https://api.qrserver.com/v1/create-qr-code/?size=200x200&data=${encodeURIComponent(config.SHORT_URL_BASE ? `${config.SHORT_URL_BASE}/${analytics.shortUrl}` : `/${analytics.shortUrl}`)}`}
+                    alt="QR Code"
+                    style={{ 
+                      display: 'block',
+                      maxWidth: '200px',
+                      height: 'auto'
+                    }}
+                  />
+                </div>
+                <p style={{ 
+                  marginTop: '10px', 
+                  fontSize: '14px', 
+                  color: '#6c757d',
+                  fontStyle: 'italic'
+                }}>
+                  Scan this QR code to visit the short URL
+                </p>
               </div>
 
               {analytics.recentClicks && analytics.recentClicks.length > 0 && (
-                <div className="analytics-card" style={{ gridColumn: '1 / -1' }}>
-                  <h4>🕒 Recent Clicks</h4>
-                  <div style={{ maxHeight: '300px', overflowY: 'auto' }}>
+                <div style={{ 
+                  gridColumn: '1 / -1',
+                  backgroundColor: 'white', 
+                  padding: '20px', 
+                  borderRadius: '8px',
+                  border: '1px solid #e9ecef',
+                  boxShadow: '0 2px 4px rgba(0,0,0,0.1)'
+                }}>
+                  <h4 style={{ color: '#fd7e14', marginBottom: '15px', fontSize: '18px' }}>🕒 Recent Clicks</h4>
+                  <div style={{ 
+                    maxHeight: '300px', 
+                    overflowY: 'auto',
+                    border: '1px solid #dee2e6',
+                    borderRadius: '6px'
+                  }}>
                     <table style={{ width: '100%', borderCollapse: 'collapse' }}>
                       <thead>
-                        <tr style={{ backgroundColor: '#f8f9fa' }}>
-                          <th style={{ padding: '8px', textAlign: 'left', borderBottom: '1px solid #dee2e6' }}>Timestamp</th>
-                          <th style={{ padding: '8px', textAlign: 'left', borderBottom: '1px solid #dee2e6' }}>IP Address</th>
-                          <th style={{ padding: '8px', textAlign: 'left', borderBottom: '1px solid #dee2e6' }}>Redirect Time</th>
-                          <th style={{ padding: '8px', textAlign: 'left', borderBottom: '1px solid #dee2e6' }}>User Agent</th>
+                        <tr style={{ backgroundColor: '#f8f9fa', position: 'sticky', top: 0 }}>
+                          <th style={{ 
+                            padding: '12px', 
+                            textAlign: 'left', 
+                            borderBottom: '2px solid #dee2e6',
+                            fontWeight: 'bold',
+                            color: '#495057'
+                          }}>Timestamp</th>
+                          <th style={{ 
+                            padding: '12px', 
+                            textAlign: 'left', 
+                            borderBottom: '2px solid #dee2e6',
+                            fontWeight: 'bold',
+                            color: '#495057'
+                          }}>IP Address</th>
+                          <th style={{ 
+                            padding: '12px', 
+                            textAlign: 'left', 
+                            borderBottom: '2px solid #dee2e6',
+                            fontWeight: 'bold',
+                            color: '#495057'
+                          }}>Redirect Time</th>
+                          <th style={{ 
+                            padding: '12px', 
+                            textAlign: 'left', 
+                            borderBottom: '2px solid #dee2e6',
+                            fontWeight: 'bold',
+                            color: '#495057'
+                          }}>User Agent</th>
                         </tr>
                       </thead>
                       <tbody>
                         {analytics.recentClicks.map((click, index) => (
-                          <tr key={index} style={{ borderBottom: '1px solid #dee2e6' }}>
-                            <td style={{ padding: '8px' }}>{formatDate(click.timestamp)}</td>
-                            <td style={{ padding: '8px' }}>{click.ip}</td>
-                            <td style={{ padding: '8px' }}>{click.redirectTime}ms</td>
-                            <td style={{ padding: '8px', maxWidth: '200px', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                          <tr key={index} style={{ 
+                            borderBottom: '1px solid #dee2e6',
+                            backgroundColor: index % 2 === 0 ? '#fff' : '#f8f9fa'
+                          }}>
+                            <td style={{ 
+                              padding: '10px',
+                              color: '#495057',
+                              fontSize: '14px'
+                            }}>{formatDate(click.timestamp)}</td>
+                            <td style={{ 
+                              padding: '10px',
+                              color: '#495057',
+                              fontFamily: 'monospace',
+                              fontSize: '14px'
+                            }}>{click.ip}</td>
+                            <td style={{ 
+                              padding: '10px',
+                              color: '#495057',
+                              fontSize: '14px'
+                            }}>{click.redirectTime}ms</td>
+                            <td style={{ 
+                              padding: '10px', 
+                              maxWidth: '200px', 
+                              overflow: 'hidden', 
+                              textOverflow: 'ellipsis', 
+                              whiteSpace: 'nowrap',
+                              color: '#6c757d',
+                              fontSize: '12px'
+                            }}>
                               {click.userAgent}
                             </td>
                           </tr>
