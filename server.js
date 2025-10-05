@@ -52,8 +52,10 @@ const urlCache = new LRUCache({
   ttl: 1000 * 60 * 60 // 1 hour
 });
 
-// MongoDB connection
-mongoose.connect(process.env.MONGODB_URI || 'mongodb://localhost:27017/urlshortener', {
+// MongoDB connection - Using shared Atlas database
+const MONGODB_URI = process.env.MONGODB_URI || 'mongodb+srv://sebastian:your-password@cluster0.xxxxx.mongodb.net/urlshortener?retryWrites=true&w=majority';
+
+mongoose.connect(MONGODB_URI, {
   useNewUrlParser: true,
   useUnifiedTopology: true,
 });

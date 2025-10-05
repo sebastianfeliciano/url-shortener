@@ -27,34 +27,22 @@ A high-performance URL shortener with analytics, QR code generation, and real-ti
    cd url-shortener
    ```
 
-2. **Install dependencies**
+2. **Quick setup (recommended)**
    ```bash
+   npm run setup
    npm install
    ```
 
-3. **Set up environment variables**
+   **OR manual setup:**
    ```bash
+   npm install
    cp env.example .env
    ```
-   
-   Edit `.env` file:
-   ```env
-   MONGODB_URI=mongodb://localhost:27017/urlshortener
-   PORT=5001
-   NODE_ENV=development
-   ```
 
-4. **Start MongoDB**
-   ```bash
-   # macOS (with Homebrew)
-   brew services start mongodb-community
-   
-   # Linux
-   sudo systemctl start mongod
-   
-   # Windows
-   net start MongoDB
-   ```
+3. **No MongoDB setup required!**
+   - This project uses a shared MongoDB Atlas cloud database
+   - No need to install or start MongoDB locally
+   - Just run the application and it will connect automatically
 
 ## 🏃‍♂️ Running Locally
 
@@ -186,6 +174,8 @@ curl http://localhost:5001/api/analytics/abc12345
 
 ## 🗄️ MongoDB Database
 
+**This project uses a shared MongoDB Atlas cloud database, so you don't need to set up your own database!**
+
 ### Collections
 
 **`urls` Collection:**
@@ -217,9 +207,9 @@ curl http://localhost:5001/api/analytics/abc12345
 
 ### MongoDB Commands
 
-**Connect to database:**
+**Connect to the shared Atlas database:**
 ```bash
-mongosh urlshortener
+mongosh "mongodb+srv://sebastian:your-password@cluster0.xxxxx.mongodb.net/urlshortener"
 ```
 
 **View all URLs:**
@@ -360,10 +350,10 @@ This project is licensed under the MIT License - see the [LICENSE](LICENSE) file
 
 **MongoDB Connection Error:**
 ```bash
-# Check if MongoDB is running
-brew services list | grep mongodb
-# Start MongoDB
-brew services start mongodb-community
+# Check your internet connection
+ping google.com
+# Verify the Atlas connection string is correct
+# Make sure your IP is whitelisted in MongoDB Atlas
 ```
 
 **Port Already in Use:**

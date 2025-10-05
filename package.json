@@ -10,6 +10,7 @@
     "build": "cd client && npm run build",
     "install-client": "cd client && npm install",
     "postinstall": "cd client && npm install",
+    "setup": "node setup.js",
     "test": "jest",
     "test:watch": "jest --watch",
     "test:coverage": "jest --coverage"
