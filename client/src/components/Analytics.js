@@ -131,7 +131,7 @@ const Analytics = () => {
         >
           🔄 Test API Connection
         </button>
-        <p style={{ fontSize: '12px', color: '#666', marginTop: '5px' }}>
+        <p style={{ fontSize: '12px', color: 'white', marginTop: '5px' }}>
           Click to test API connection and check browser console for details
         </p>
       </div>
