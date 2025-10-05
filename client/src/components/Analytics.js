@@ -30,23 +30,37 @@ const Analytics = () => {
 
   const fetchAllUrls = async () => {
     try {
-      console.log('Fetching URLs from:', `${config.API_BASE_URL}/api/urls`);
-      const response = await fetch(`${config.API_BASE_URL}/api/urls`);
-      console.log('Response status:', response.status);
-      console.log('Response ok:', response.ok);
+      const apiUrl = `${config.API_BASE_URL}/api/urls`;
+      console.log('🔍 Config object:', config);
+      console.log('🔍 API_BASE_URL:', config.API_BASE_URL);
+      console.log('🔍 Full API URL:', apiUrl);
+      console.log('🔍 Environment variables:', {
+        REACT_APP_API_URL: process.env.REACT_APP_API_URL,
+        NODE_ENV: process.env.NODE_ENV
+      });
+      
+      const response = await fetch(apiUrl);
+      console.log('📡 Response status:', response.status);
+      console.log('📡 Response ok:', response.ok);
+      console.log('📡 Response headers:', Object.fromEntries(response.headers.entries()));
       
       const data = await response.json();
-      console.log('Response data:', data);
+      console.log('📊 Response data:', data);
       
       if (response.ok) {
         setAllUrls(data);
-        console.log('URLs set successfully:', data.length, 'items');
+        console.log('✅ URLs set successfully:', data.length, 'items');
       } else {
-        console.error('API error:', data);
+        console.error('❌ API error:', data);
         setError('Failed to fetch URLs: ' + (data.error || 'Unknown error'));
       }
     } catch (err) {
-      console.error('Network error fetching URLs:', err);
+      console.error('💥 Network error fetching URLs:', err);
+      console.error('💥 Error details:', {
+        name: err.name,
+        message: err.message,
+        stack: err.stack
+      });
       setError('Network error while fetching URLs: ' + err.message);
     }
   };
@@ -102,6 +116,26 @@ const Analytics = () => {
         />
       </div>
 
+      {/* Debug Test Button */}
+      <div style={{ marginBottom: '20px' }}>
+        <button 
+          onClick={fetchAllUrls}
+          style={{ 
+            padding: '10px 20px', 
+            backgroundColor: '#007bff', 
+            color: 'white', 
+            border: 'none', 
+            borderRadius: '5px',
+            cursor: 'pointer'
+          }}
+        >
+          🔄 Test API Connection
+        </button>
+        <p style={{ fontSize: '12px', color: '#666', marginTop: '5px' }}>
+          Click to test API connection and check browser console for details
+        </p>
+      </div>
+
       {error && <div className="error">{error}</div>}
 
       {/* URL List */}
@@ -130,7 +164,23 @@ const Analytics = () => {
                 <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
                   <div style={{ flex: 1 }}>
                     <div style={{ display: 'flex', alignItems: 'center', gap: '10px', marginBottom: '5px' }}>
-                      <strong style={{ color: '#1976d2' }}>{url.shortUrl}</strong>
+                      <a 
+                        href={`${config.SHORT_URL_BASE}/${url.shortUrl}`}
+                        target="_blank" 
+                        rel="noopener noreferrer"
+                        style={{ 
+                          color: '#1976d2', 
+                          textDecoration: 'none',
+                          fontWeight: 'bold',
+                          padding: '2px 6px',
+                          borderRadius: '4px',
+                          backgroundColor: '#e3f2fd',
+                          border: '1px solid #1976d2'
+                        }}
+                        onClick={(e) => e.stopPropagation()}
+                      >
+                        {config.SHORT_URL_BASE ? `${config.SHORT_URL_BASE}/${url.shortUrl}` : `/${url.shortUrl}`}
+                      </a>
                       <span style={{ fontSize: '18px' }}>→</span>
                       <span style={{ color: '#666', fontSize: '14px', maxWidth: '300px', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
                         {url.longUrl}
@@ -155,7 +205,16 @@ const Analytics = () => {
       {/* Detailed Analytics */}
       {selectedUrl && (
         <div style={{ borderTop: '2px solid #1976d2', paddingTop: '20px' }}>
-          <h3>📈 Detailed Analytics for {selectedUrl.shortUrl}</h3>
+          <h3>📈 Detailed Analytics for 
+            <a 
+              href={`${config.SHORT_URL_BASE}/${selectedUrl.shortUrl}`}
+              target="_blank" 
+              rel="noopener noreferrer" 
+              style={{ marginLeft: '5px', color: '#1976d2' }}
+            >
+              {config.SHORT_URL_BASE ? `${config.SHORT_URL_BASE}/${selectedUrl.shortUrl}` : `/${selectedUrl.shortUrl}`}
+            </a>
+          </h3>
           
           {loading && <p>Loading analytics...</p>}
           
@@ -163,7 +222,16 @@ const Analytics = () => {
             <div className="analytics-grid">
               <div className="analytics-card">
                 <h4>🔗 URL Information</h4>
-                <p><strong>Short URL:</strong> {analytics.shortUrl}</p>
+                <p><strong>Short URL:</strong> 
+                  <a 
+                    href={`${config.SHORT_URL_BASE}/${analytics.shortUrl}`}
+                    target="_blank" 
+                    rel="noopener noreferrer" 
+                    style={{ marginLeft: '5px', color: '#1976d2' }}
+                  >
+                    {config.SHORT_URL_BASE ? `${config.SHORT_URL_BASE}/${analytics.shortUrl}` : `/${analytics.shortUrl}`}
+                  </a>
+                </p>
                 <p><strong>Long URL:</strong> 
                   <a href={analytics.longUrl} target="_blank" rel="noopener noreferrer" style={{ marginLeft: '5px', color: '#1976d2' }}>
                     {analytics.longUrl}
