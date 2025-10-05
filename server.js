@@ -142,8 +142,8 @@ app.post('/api/create', async (req, res) => {
   }
 });
 
-// GET /:shortUrl - Redirect to long URL
-app.get('/:shortUrl', async (req, res) => {
+// GET /:shortUrl - Redirect to long URL (only for 8-character alphanumeric strings)
+app.get('/:shortUrl([a-zA-Z0-9]{8})', async (req, res) => {
   const startTime = Date.now();
   const { shortUrl } = req.params;
 
@@ -155,7 +155,11 @@ app.get('/:shortUrl', async (req, res) => {
       // If not in cache, check database
       const url = await Url.findOne({ shortUrl });
       if (!url) {
-        return res.status(404).json({ error: 'Short URL not found' });
+        return res.status(404).json({ 
+          error: 'Short URL not found',
+          code: 'NOT_FOUND',
+          message: 'The requested short URL does not exist'
+        });
       }
       
       urlData = {
@@ -254,15 +258,47 @@ app.get('/api/stats', async (req, res) => {
   }
 });
 
+// GET /api/urls - Get all URLs
+app.get('/api/urls', async (req, res) => {
+  try {
+    const urls = await Url.find({}, 'shortUrl longUrl clickCount createdAt lastAccessed')
+      .sort({ createdAt: -1 })
+      .limit(100); // Limit to prevent large responses
+
+    res.json(urls);
+
+  } catch (error) {
+    console.error('Error fetching URLs:', error);
+    res.status(500).json({ error: 'Internal server error' });
+  }
+});
+
 // Health check endpoint
 app.get('/api/health', (req, res) => {
   res.json({ status: 'OK', timestamp: new Date().toISOString() });
 });
 
+// Root path handler for development
+app.get('/', (req, res) => {
+  res.json({
+    message: 'URL Shortener API',
+    version: '1.0.0',
+    endpoints: {
+      create: 'POST /api/create',
+      analytics: 'GET /api/analytics/:shortUrl',
+      stats: 'GET /api/stats',
+      health: 'GET /api/health',
+      redirect: 'GET /:shortUrl'
+    },
+    documentation: 'Visit the client application for the full interface'
+  });
+});
+
 // Serve static files in production
 if (process.env.NODE_ENV === 'production') {
-  app.use(express.static('client/build'));
+  app.use(express.static(path.join(__dirname, 'client/build')));
   
+  // Catch-all handler: send back React's index.html file for any non-API routes
   app.get('*', (req, res) => {
     res.sendFile(path.join(__dirname, 'client/build', 'index.html'));
   });
