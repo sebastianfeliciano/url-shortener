@@ -10,7 +10,7 @@ const envPath = path.join(__dirname, '.env');
 if (!fs.existsSync(envPath)) {
   console.log('📝 Creating .env file...');
   const envContent = `# MongoDB Atlas connection (shared database)
-MONGODB_URI=mongodb+srv://sebastian:your-password@cluster0.xxxxx.mongodb.net/urlshortener?retryWrites=true&w=majority
+MONGODB_URI=mongodb+srv://snfelexstudents2025_db_user:9vvR5qZVJGqWJ0Vt@urlshortener.nay4npn.mongodb.net/?retryWrites=true&w=majority&appName=urlshortener
 
 PORT=5001
 NODE_ENV=development

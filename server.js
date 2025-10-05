@@ -53,7 +53,7 @@ const urlCache = new LRUCache({
 });
 
 // MongoDB connection - Using shared Atlas database
-const MONGODB_URI = process.env.MONGODB_URI || 'mongodb+srv://sebastian:your-password@cluster0.xxxxx.mongodb.net/urlshortener?retryWrites=true&w=majority';
+const MONGODB_URI = process.env.MONGODB_URI || 'mongodb+srv://snfelexstudents2025_db_user:9vvR5qZVJGqWJ0Vt@urlshortener.nay4npn.mongodb.net/?retryWrites=true&w=majority&appName=urlshortener';
 
 mongoose.connect(MONGODB_URI, {
   useNewUrlParser: true,
