@@ -210,7 +210,7 @@ const Analytics = () => {
               href={`${config.SHORT_URL_BASE}/${selectedUrl.shortUrl}`}
               target="_blank" 
               rel="noopener noreferrer" 
-              style={{ marginLeft: '5px', color: '#1976d2' }}
+              style={{ marginLeft: '5px', color: '#000000' }}
             >
               {config.SHORT_URL_BASE ? `${config.SHORT_URL_BASE}/${selectedUrl.shortUrl}` : `/${selectedUrl.shortUrl}`}
             </a>
