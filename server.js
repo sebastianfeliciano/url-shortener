@@ -118,6 +118,16 @@ profileSchema.pre('save', async function(next) {
 
 // Method to compare password
 profileSchema.methods.comparePassword = async function(candidatePassword) {
+  // Check if password is hashed (starts with $2b$)
+  const isHashed = this.password && this.password.startsWith('$2b$');
+  
+  if (!isHashed) {
+    // Password is stored as plain text (legacy issue) - compare directly
+    console.warn('⚠️ Password stored as plain text for user:', this.username);
+    return this.password === candidatePassword;
+  }
+  
+  // Normal bcrypt comparison
   return bcrypt.compare(candidatePassword, this.password);
 };
 
@@ -523,13 +533,22 @@ app.post('/api/profiles/login', async (req, res) => {
     console.log('🔍 Login attempt:', {
       username: profile.username,
       passwordIsHashed: isHashed,
-      passwordLength: profile.password ? profile.password.length : 0
+      passwordLength: profile.password ? profile.password.length : 0,
+      passwordPrefix: profile.password ? profile.password.substring(0, 10) : 'none'
     });
 
     const isMatch = await profile.comparePassword(password);
     if (!isMatch) {
       console.log('❌ Login failed: Password mismatch for user:', username);
       return res.status(401).json({ error: 'Invalid credentials' });
+    }
+
+    // If password was plain text and login succeeded, re-hash it for security
+    if (!isHashed) {
+      console.log('⚠️ Re-hashing plain text password for user:', username);
+      profile.password = await bcrypt.hash(password, 10);
+      await profile.save();
+      console.log('✅ Password re-hashed successfully');
     }
 
     console.log('✅ Login successful for:', username);
