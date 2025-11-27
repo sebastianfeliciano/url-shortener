@@ -328,7 +328,8 @@ app.post('/api/profiles/register', async (req, res) => {
       return res.status(409).json({ error: 'Email already registered' });
     }
 
-    const profile = new Profile({ username, email, password });
+    // Store password as plain text (no hashing)
+    const profile = new Profile({ username, email, password: password.trim() });
     
     try {
       await profile.save();
