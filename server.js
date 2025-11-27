@@ -470,9 +470,9 @@ app.post('/api/profiles/reset-password', async (req, res) => {
       return res.status(400).json({ error: 'Invalid or expired reset token' });
     }
 
-    // Update password - mark as modified to trigger pre-save hook for hashing
-    profile.password = newPassword;
-    profile.markModified('password'); // Ensure password is marked as modified
+    // Update password - hash it directly to ensure it's saved correctly
+    const hashedPassword = await bcrypt.hash(newPassword, 10);
+    profile.password = hashedPassword;
     profile.resetToken = undefined;
     profile.resetTokenExpiry = undefined;
     await profile.save();
