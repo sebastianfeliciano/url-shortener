@@ -71,19 +71,27 @@ const urlCache = new LRUCache({
 // MongoDB connection - Using Atlas database
 const MONGODB_URI = process.env.MONGODB_URI || 'mongodb+srv://giuseppi:supersecretpassword@kambaz.auzwwz1.mongodb.net/urlshortener?retryWrites=true&w=majority';
 
-mongoose.connect(MONGODB_URI, {
-  useNewUrlParser: true,
-  useUnifiedTopology: true,
-}).then(() => {
-  console.log('MongoDB connected successfully');
-  console.log('Database:', mongoose.connection.db.databaseName);
-  console.log('Collections:', mongoose.connection.db.listCollections().toArray().then(cols => {
-    console.log('Available collections:', cols.map(c => c.name));
-  }));
-}).catch((error) => {
-  console.error('MongoDB connection error:', error);
-  console.error('Connection string:', MONGODB_URI.replace(/:[^:@]+@/, ':****@')); // Hide password
-});
+// For serverless environments (Vercel), reuse existing connection
+if (mongoose.connection.readyState === 0) {
+  mongoose.connect(MONGODB_URI, {
+    useNewUrlParser: true,
+    useUnifiedTopology: true,
+    serverSelectionTimeoutMS: 5000, // Timeout after 5s instead of 30s
+    socketTimeoutMS: 45000, // Close sockets after 45s of inactivity
+  }).then(() => {
+    console.log('MongoDB connected successfully');
+    const db = mongoose.connection.db;
+    console.log('Database:', db.databaseName);
+    db.listCollections().toArray().then(cols => {
+      console.log('Available collections:', cols.map(c => c.name));
+    }).catch(err => console.error('Error listing collections:', err));
+  }).catch((error) => {
+    console.error('MongoDB connection error:', error);
+    console.error('Connection string:', MONGODB_URI.replace(/:[^:@]+@/, ':****@')); // Hide password
+  });
+} else {
+  console.log('MongoDB connection already established');
+}
 
 // Profile Schema
 const profileSchema = new mongoose.Schema({
