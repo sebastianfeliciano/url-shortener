@@ -48,12 +48,12 @@ RUN addgroup -g 1001 -S nodejs && \
     chown -R nodejs:nodejs /app
 USER nodejs
 
-# Expose port
-EXPOSE 5000
+# Expose port (Render sets PORT via environment variable)
+EXPOSE ${PORT:-5000}
 
-# Health check
+# Health check (uses PORT from environment)
 HEALTHCHECK --interval=30s --timeout=3s --start-period=5s --retries=3 \
-  CMD node -e "require('http').get('http://localhost:5000/api/health', (r) => {process.exit(r.statusCode === 200 ? 0 : 1)})"
+  CMD node -e "const port = process.env.PORT || 5000; require('http').get(\`http://localhost:\${port}/api/health\`, (r) => {process.exit(r.statusCode === 200 ? 0 : 1)})"
 
 # Use dumb-init to handle signals properly
 ENTRYPOINT ["dumb-init", "--"]

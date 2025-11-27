@@ -1,9 +1,9 @@
 services:
   - type: web
     name: url-shortener
-    env: node
-    buildCommand: npm install && cd client && npm install && npm run build
-    startCommand: node server.js
+    env: docker
+    dockerfilePath: ./Dockerfile
+    dockerContext: .
     envVars:
       - key: NODE_ENV
         value: production

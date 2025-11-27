@@ -28,13 +28,31 @@ Name: DOCKER_USERNAME
 Value: [your-docker-hub-username]
 ```
 
-### 4. DOCKER_PASSWORD (Optional - for Docker Hub)
+### 4. DOCKER_PASSWORD (Required for Docker + Render Deployment)
 1. Go to https://hub.docker.com/settings/security
 2. Create an access token
 3. Add to GitHub secrets:
 ```
 Name: DOCKER_PASSWORD
 Value: [your-docker-access-token]
+```
+
+### 5. RENDER_API_KEY (Optional - for triggering Render deployments)
+1. Go to https://dashboard.render.com → Account Settings → API Keys
+2. Create a new API key
+3. Add to GitHub secrets:
+```
+Name: RENDER_API_KEY
+Value: [your-render-api-key]
+```
+
+### 6. RENDER_SERVICE_ID (Optional - for triggering Render deployments)
+1. Go to https://dashboard.render.com → Your Service → Settings
+2. Copy the Service ID
+3. Add to GitHub secrets:
+```
+Name: RENDER_SERVICE_ID
+Value: [your-render-service-id]
 ```
 
 ## How It Works
