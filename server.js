@@ -92,15 +92,18 @@ if (mongoose.connection.readyState === 0) {
     console.log('MongoDB connected successfully');
     const db = mongoose.connection.db;
     console.log('Database:', db.databaseName);
+    updateDbStatus(mongoose); // Update metrics
     db.listCollections().toArray().then(cols => {
       console.log('Available collections:', cols.map(c => c.name));
     }).catch(err => console.error('Error listing collections:', err));
   }).catch((error) => {
     console.error('MongoDB connection error:', error);
     console.error('Connection string:', MONGODB_URI.replace(/:[^:@]+@/, ':****@')); // Hide password
+    updateDbStatus(mongoose); // Update metrics
   });
 } else {
   console.log('MongoDB connection already established');
+  updateDbStatus(mongoose); // Update metrics
 }
 
 // Profile Schema
@@ -865,6 +868,21 @@ app.get('/api/health', (req, res) => {
     database: dbStatusText,
     databaseReady: dbStatus === 1
   });
+});
+
+// Prometheus metrics endpoint
+app.get('/metrics', async (req, res) => {
+  try {
+    // Update DB status before returning metrics
+    updateDbStatus(mongoose);
+    
+    res.set('Content-Type', register.contentType);
+    const metrics = await getMetrics();
+    res.end(metrics);
+  } catch (error) {
+    console.error('Error generating metrics:', error);
+    res.status(500).end();
+  }
 });
 
 // GET /api/debug/user/:username - Debug endpoint to check user password status
