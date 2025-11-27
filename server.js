@@ -185,12 +185,15 @@ const createEmailTransporter = () => {
   if (process.env.SMTP_HOST && process.env.SMTP_USER && process.env.SMTP_PASS) {
     return nodemailer.createTransport({
       host: process.env.SMTP_HOST,
-      port: process.env.SMTP_PORT || 587,
+      port: parseInt(process.env.SMTP_PORT) || 587,
       secure: process.env.SMTP_SECURE === 'true',
       auth: {
         user: process.env.SMTP_USER,
         pass: process.env.SMTP_PASS
-      }
+      },
+      connectionTimeout: 10000, // 10 seconds
+      greetingTimeout: 10000,
+      socketTimeout: 10000
     });
   }
   
@@ -199,9 +202,18 @@ const createEmailTransporter = () => {
   if (process.env.GMAIL_USER && process.env.GMAIL_PASS) {
     return nodemailer.createTransport({
       service: 'gmail',
+      host: 'smtp.gmail.com',
+      port: 587,
+      secure: false, // true for 465, false for other ports
       auth: {
         user: process.env.GMAIL_USER,
         pass: process.env.GMAIL_PASS
+      },
+      connectionTimeout: 15000, // 15 seconds
+      greetingTimeout: 15000,
+      socketTimeout: 15000,
+      tls: {
+        rejectUnauthorized: false // Allow self-signed certificates if needed
       }
     });
   }
@@ -330,8 +342,8 @@ app.post('/api/profiles/forgot-password', async (req, res) => {
     // Send reset email
     const resetUrl = `${BASE_URL}/reset-password?token=${resetToken}`;
     
-    try {
-      await emailTransporter.sendMail({
+      try {
+      const mailOptions = {
         from: process.env.SMTP_FROM || process.env.GMAIL_USER || 'noreply@urlshortener.com',
         to: profile.email,
         subject: 'Password Reset Request - URL Shortener',
@@ -357,12 +369,23 @@ app.post('/api/profiles/forgot-password', async (req, res) => {
           
           If you didn't request this, please ignore this email.
         `
-      });
+      };
 
+      // Verify connection before sending
+      await emailTransporter.verify();
+      console.log('✅ Email server connection verified');
+
+      await emailTransporter.sendMail(mailOptions);
       console.log('✅ Password reset email sent to:', profile.email);
     } catch (emailError) {
       console.error('❌ Error sending email:', emailError);
+      console.error('Email error details:', {
+        code: emailError.code,
+        command: emailError.command,
+        response: emailError.response
+      });
       // Don't fail the request if email fails, but log it
+      // In production, you might want to queue the email for retry
     }
 
     res.status(200).json({ 
