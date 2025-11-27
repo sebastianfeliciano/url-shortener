@@ -135,10 +135,10 @@ profileSchema.methods.comparePassword = async function(candidatePassword) {
     return match;
   }
   
-  // Normal bcrypt comparison
+  // Use bcrypt.compare correctly: bcrypt.compare(submittedPassword, storedUserHash)
   try {
-    const result = await bcrypt.compare(candidatePassword, this.password);
-    return result;
+    const isMatch = await bcrypt.compare(candidatePassword, this.password);
+    return isMatch;
   } catch (error) {
     console.error('❌ Error comparing password:', error);
     return false;
@@ -495,8 +495,10 @@ app.post('/api/profiles/reset-password', async (req, res) => {
     }
 
     // Update password - hash it directly to ensure it's saved correctly
-    const hashedPassword = await bcrypt.hash(newPassword, 10);
-    profile.password = hashedPassword;
+    const saltRounds = 10;
+    const newHashedPassword = await bcrypt.hash(newPassword, saltRounds);
+    
+    profile.password = newHashedPassword;
     profile.resetToken = undefined;
     profile.resetTokenExpiry = undefined;
     await profile.save();
@@ -552,6 +554,7 @@ app.post('/api/profiles/login', async (req, res) => {
       inputPasswordLength: password ? password.length : 0
     });
 
+    // Use bcrypt.compare correctly: bcrypt.compare(submittedPassword, storedUserHash)
     const isMatch = await profile.comparePassword(password);
     console.log('🔍 Password comparison result:', isMatch);
     
