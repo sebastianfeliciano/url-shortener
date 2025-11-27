@@ -32,6 +32,8 @@ cd client && npm install && npm run build
 client/build
 ```
 
+**Important:** Make sure the Output Directory is set to `client/build` (not `public` or `build`)
+
 **Install Command:**
 ```
 npm install
