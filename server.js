@@ -830,10 +830,11 @@ if (process.env.NODE_ENV === 'production') {
       return res.status(404).json({ error: 'API endpoint not found' });
     }
     // Skip short URL redirects (8-char codes) - they're handled by the redirect route
-    if (/^\/[a-zA-Z0-9_-]{8}$/.test(req.path)) {
+    // Only match exact 8-character paths (not paths that start with 8 chars)
+    if (/^\/[a-zA-Z0-9_-]{8}$/.test(req.path) && !req.path.includes('/')) {
       return res.status(404).json({ error: 'Short URL not found' });
     }
-    // For all other routes, serve the React app
+    // For all other routes (including /reset-password), serve the React app
     res.sendFile(path.join(__dirname, 'client/build', 'index.html'));
   });
 }
