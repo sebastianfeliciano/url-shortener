@@ -118,17 +118,31 @@ profileSchema.pre('save', async function(next) {
 
 // Method to compare password
 profileSchema.methods.comparePassword = async function(candidatePassword) {
+  if (!this.password || !candidatePassword) {
+    return false;
+  }
+  
   // Check if password is hashed (starts with $2b$)
-  const isHashed = this.password && this.password.startsWith('$2b$');
+  const isHashed = this.password.startsWith('$2b$') || this.password.startsWith('$2a$');
   
   if (!isHashed) {
     // Password is stored as plain text (legacy issue) - compare directly
     console.warn('⚠️ Password stored as plain text for user:', this.username);
-    return this.password === candidatePassword;
+    const match = this.password === candidatePassword;
+    if (match) {
+      console.log('✅ Plain text password match - will re-hash after login');
+    }
+    return match;
   }
   
   // Normal bcrypt comparison
-  return bcrypt.compare(candidatePassword, this.password);
+  try {
+    const result = await bcrypt.compare(candidatePassword, this.password);
+    return result;
+  } catch (error) {
+    console.error('❌ Error comparing password:', error);
+    return false;
+  }
 };
 
 const Profile = mongoose.model('Profile', profileSchema);
@@ -529,26 +543,34 @@ app.post('/api/profiles/login', async (req, res) => {
     }
 
     // Debug: Check if password is hashed (should start with $2b$)
-    const isHashed = profile.password && profile.password.startsWith('$2b$');
+    const isHashed = profile.password && (profile.password.startsWith('$2b$') || profile.password.startsWith('$2a$'));
     console.log('🔍 Login attempt:', {
       username: profile.username,
       passwordIsHashed: isHashed,
       passwordLength: profile.password ? profile.password.length : 0,
-      passwordPrefix: profile.password ? profile.password.substring(0, 10) : 'none'
+      passwordPrefix: profile.password ? profile.password.substring(0, 15) : 'none',
+      inputPasswordLength: password ? password.length : 0
     });
 
     const isMatch = await profile.comparePassword(password);
+    console.log('🔍 Password comparison result:', isMatch);
+    
     if (!isMatch) {
       console.log('❌ Login failed: Password mismatch for user:', username);
+      console.log('❌ Stored password type:', isHashed ? 'hashed' : 'plain text');
       return res.status(401).json({ error: 'Invalid credentials' });
     }
 
     // If password was plain text and login succeeded, re-hash it for security
     if (!isHashed) {
       console.log('⚠️ Re-hashing plain text password for user:', username);
-      profile.password = await bcrypt.hash(password, 10);
-      await profile.save();
-      console.log('✅ Password re-hashed successfully');
+      try {
+        profile.password = await bcrypt.hash(password, 10);
+        await profile.save();
+        console.log('✅ Password re-hashed successfully');
+      } catch (hashError) {
+        console.error('❌ Error re-hashing password:', hashError);
+      }
     }
 
     console.log('✅ Login successful for:', username);
