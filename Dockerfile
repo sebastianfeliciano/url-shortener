@@ -28,13 +28,13 @@ FROM node:18-alpine
 WORKDIR /app
 
 # Install dumb-init for proper signal handling
-RUN apk add --no-cache dumb-init
+RUN apk add --no-cache dumb-init curl
 
 # Copy package files
 COPY package*.json ./
 
-# Install only production dependencies
-RUN npm ci --production && npm cache clean --force
+# Install only production dependencies (using npm install instead of npm ci for better compatibility)
+RUN npm install --production --no-audit --no-fund && npm cache clean --force
 
 # Copy built application from builder
 COPY --from=builder /app/server.js ./
@@ -51,9 +51,9 @@ USER nodejs
 # Expose port (Render sets PORT via environment variable)
 EXPOSE ${PORT:-5000}
 
-# Health check (uses PORT from environment)
+# Health check (uses PORT from environment, curl is more reliable)
 HEALTHCHECK --interval=30s --timeout=3s --start-period=5s --retries=3 \
-  CMD node -e "const port = process.env.PORT || 5000; require('http').get(\`http://localhost:\${port}/api/health\`, (r) => {process.exit(r.statusCode === 200 ? 0 : 1)})"
+  CMD curl -f http://localhost:${PORT:-5000}/api/health || exit 1
 
 # Use dumb-init to handle signals properly
 ENTRYPOINT ["dumb-init", "--"]
