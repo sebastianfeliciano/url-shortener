@@ -258,7 +258,23 @@ const Profile = ({ onLoginStateChange }) => {
     setUserUrls([]);
     setAnalytics(null);
     setShowAnalytics(false);
+    setShowResetPassword(false);
+    setShowForgotPassword(false);
+    setResetToken('');
+    setNewPassword('');
+    setConfirmPassword('');
+    setEmail('');
+    setUsername('');
+    setPassword('');
+    setError('');
+    setSuccessMessage('');
     localStorage.removeItem('user');
+    
+    // Clear URL parameters (like ?token=...) to return to home page
+    if (window.history && window.history.replaceState) {
+      window.history.replaceState({}, document.title, window.location.pathname);
+    }
+    
     if (onLoginStateChange) {
       onLoginStateChange(false);
     }
