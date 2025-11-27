@@ -39,6 +39,7 @@ RUN npm install --production --no-audit --no-fund --ignore-scripts && npm cache 
 # Copy built application from builder
 COPY --from=builder /app/server.js ./
 COPY --from=builder /app/api ./api
+COPY --from=builder /app/middleware ./middleware
 COPY --from=builder /app/client/build ./client/build
 
 # Use the existing node user (already exists in node:18-alpine)
