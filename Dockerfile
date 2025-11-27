@@ -33,8 +33,8 @@ RUN apk add --no-cache dumb-init curl
 # Copy package files
 COPY package*.json ./
 
-# Install only production dependencies (using npm install instead of npm ci for better compatibility)
-RUN npm install --production --no-audit --no-fund && npm cache clean --force
+# Install only production dependencies (skip postinstall script to avoid client install)
+RUN npm install --production --no-audit --no-fund --ignore-scripts && npm cache clean --force
 
 # Copy built application from builder
 COPY --from=builder /app/server.js ./
