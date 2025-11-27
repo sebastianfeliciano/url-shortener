@@ -14,12 +14,19 @@ const UrlShortener = () => {
     setResult(null);
 
     try {
+      // Get user from localStorage if logged in
+      const savedUser = localStorage.getItem('user');
+      const user = savedUser ? JSON.parse(savedUser) : null;
+      
       const response = await fetch(`${config.API_BASE_URL}/api/create`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
         },
-        body: JSON.stringify({ longUrl }),
+        body: JSON.stringify({ 
+          longUrl,
+          profileId: user ? user.id : null
+        }),
       });
 
       const data = await response.json();

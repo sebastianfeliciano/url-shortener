@@ -12,7 +12,16 @@ const Stats = () => {
 
   const fetchStats = async () => {
     try {
-      const response = await fetch(`${config.API_BASE_URL}/api/stats`);
+      // Get current user from localStorage
+      const savedUser = localStorage.getItem('user');
+      const user = savedUser ? JSON.parse(savedUser) : null;
+      
+      // Fetch stats for the logged-in user
+      const apiUrl = user 
+        ? `${config.API_BASE_URL}/api/stats?profileId=${user.id}`
+        : `${config.API_BASE_URL}/api/stats`;
+      
+      const response = await fetch(apiUrl);
       const data = await response.json();
 
       if (response.ok) {
@@ -35,9 +44,13 @@ const Stats = () => {
     return <div className="error">{error}</div>;
   }
 
+  // Get current user to show personalized message
+  const savedUser = localStorage.getItem('user');
+  const user = savedUser ? JSON.parse(savedUser) : null;
+
   return (
     <div>
-      <h2>📊 System Statistics</h2>
+      <h2>📊 {user ? 'Your Statistics' : 'System Statistics'}</h2>
       <p>Real-time statistics for the URL shortener service</p>
       
       <div className="stats-grid">

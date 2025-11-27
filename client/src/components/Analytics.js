@@ -30,14 +30,17 @@ const Analytics = () => {
 
   const fetchAllUrls = async () => {
     try {
-      const apiUrl = `${config.API_BASE_URL}/api/urls`;
-      console.log('🔍 Config object:', config);
-      console.log('🔍 API_BASE_URL:', config.API_BASE_URL);
-      console.log('🔍 Full API URL:', apiUrl);
-      console.log('🔍 Environment variables:', {
-        REACT_APP_API_URL: process.env.REACT_APP_API_URL,
-        NODE_ENV: process.env.NODE_ENV
-      });
+      // Get current user from localStorage
+      const savedUser = localStorage.getItem('user');
+      const user = savedUser ? JSON.parse(savedUser) : null;
+      
+      // Only fetch URLs for the logged-in user
+      const apiUrl = user 
+        ? `${config.API_BASE_URL}/api/urls?profileId=${user.id}`
+        : `${config.API_BASE_URL}/api/urls`;
+      
+      console.log('🔍 Fetching URLs for user:', user ? user.username : 'anonymous');
+      console.log('🔍 API URL:', apiUrl);
       
       const response = await fetch(apiUrl);
       console.log('📡 Response status:', response.status);
@@ -106,9 +109,13 @@ const Analytics = () => {
     return new Date(dateString).toLocaleString();
   };
 
+  // Get current user to show personalized message
+  const savedUser = localStorage.getItem('user');
+  const user = savedUser ? JSON.parse(savedUser) : null;
+
   return (
     <div>
-      <h2>📊 URL Analytics Dashboard</h2>
+      <h2>📊 {user ? 'Your URL Analytics' : 'URL Analytics Dashboard'}</h2>
       
       {/* Search Bar */}
       <div className="form-group" style={{ marginBottom: '20px' }}>
@@ -147,7 +154,7 @@ const Analytics = () => {
 
       {/* URL List */}
       <div style={{ marginBottom: '30px' }}>
-        <h3>📋 All Short URLs ({filteredUrls.length})</h3>
+        <h3>📋 {user ? 'Your Short URLs' : 'All Short URLs'} ({filteredUrls.length})</h3>
         {filteredUrls.length === 0 ? (
           <p>No URLs found. Create some short URLs first!</p>
         ) : (

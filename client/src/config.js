@@ -1,20 +1,19 @@
 // Get the server's base URL dynamically
 function getServerBaseUrl() {
+  // In production, use the same origin (deployed URL)
   if (process.env.NODE_ENV === 'production') {
-    return process.env.REACT_APP_API_URL || 'http://localhost:5001';
-  }
-  
-  // In development, if accessing via localhost, use the network IP
-  if (typeof window !== 'undefined') {
-    if (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1') {
-      // Use the network IP that React dev server shows
-      // This matches the IP the server is running on
-      return 'http://192.168.1.162:5001';
+    // If REACT_APP_API_URL is set, use it
+    if (process.env.REACT_APP_API_URL) {
+      return process.env.REACT_APP_API_URL;
     }
-    // If accessing directly via IP, use that IP
-    return `http://${window.location.hostname}:5001`;
+    // Otherwise, use the same origin as the frontend
+    if (typeof window !== 'undefined') {
+      return window.location.origin;
+    }
+    return 'http://localhost:5001';
   }
   
+  // In development, use localhost:5001
   return 'http://localhost:5001';
 }
 
