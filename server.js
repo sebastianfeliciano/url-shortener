@@ -8,6 +8,7 @@ const QRCode = require('qrcode');
 const { LRUCache } = require('lru-cache');
 const bcrypt = require('bcryptjs');
 const nodemailer = require('nodemailer');
+const sgMail = require('@sendgrid/mail');
 const path = require('path');
 require('dotenv').config();
 
@@ -179,7 +180,13 @@ function isValidEmail(email) {
   return emailRegex.test(email);
 }
 
-// Setup email transporter (using Gmail or environment variables)
+// Setup SendGrid API (preferred for cloud deployments)
+if (process.env.SENDGRID_API_KEY) {
+  sgMail.setApiKey(process.env.SENDGRID_API_KEY);
+  console.log('✅ SendGrid API configured');
+}
+
+// Setup email transporter (using Gmail or SMTP as fallback)
 const createEmailTransporter = () => {
   // For production, use environment variables
   if (process.env.SMTP_HOST && process.env.SMTP_USER && process.env.SMTP_PASS) {
@@ -198,22 +205,21 @@ const createEmailTransporter = () => {
   }
   
   // For development/testing, use Gmail (requires app password)
-  // You can also use services like SendGrid, Mailgun, etc.
   if (process.env.GMAIL_USER && process.env.GMAIL_PASS) {
     return nodemailer.createTransport({
       service: 'gmail',
       host: 'smtp.gmail.com',
       port: 587,
-      secure: false, // true for 465, false for other ports
+      secure: false,
       auth: {
         user: process.env.GMAIL_USER,
         pass: process.env.GMAIL_PASS
       },
-      connectionTimeout: 15000, // 15 seconds
+      connectionTimeout: 15000,
       greetingTimeout: 15000,
       socketTimeout: 15000,
       tls: {
-        rejectUnauthorized: false // Allow self-signed certificates if needed
+        rejectUnauthorized: false
       }
     });
   }
@@ -233,6 +239,43 @@ const createEmailTransporter = () => {
 };
 
 const emailTransporter = createEmailTransporter();
+
+// Send email function (prefers SendGrid API, falls back to SMTP)
+const sendEmail = async (options) => {
+  // Use SendGrid API if available (more reliable for cloud)
+  if (process.env.SENDGRID_API_KEY) {
+    try {
+      const msg = {
+        to: options.to,
+        from: options.from || process.env.SENDGRID_FROM || process.env.SMTP_FROM || 'noreply@urlshortener.com',
+        subject: options.subject,
+        text: options.text,
+        html: options.html
+      };
+      
+      await sgMail.send(msg);
+      console.log('✅ Email sent via SendGrid API to:', options.to);
+      return { messageId: 'sendgrid-api' };
+    } catch (error) {
+      console.error('❌ SendGrid API error:', error);
+      // Fall back to SMTP if API fails
+      if (error.response) {
+        console.error('SendGrid error details:', error.response.body);
+      }
+    }
+  }
+  
+  // Fall back to SMTP (nodemailer)
+  try {
+    await emailTransporter.verify();
+    const result = await emailTransporter.sendMail(options);
+    console.log('✅ Email sent via SMTP to:', options.to);
+    return result;
+  } catch (error) {
+    console.error('❌ SMTP error:', error);
+    throw error;
+  }
+};
 
 // POST /api/profiles/register - Register a new profile
 app.post('/api/profiles/register', async (req, res) => {
@@ -343,8 +386,10 @@ app.post('/api/profiles/forgot-password', async (req, res) => {
     const resetUrl = `${BASE_URL}/reset-password?token=${resetToken}`;
     
       try {
+      const fromEmail = process.env.SENDGRID_FROM || process.env.SMTP_FROM || process.env.GMAIL_USER || 'noreply@urlshortener.com';
+      
       const mailOptions = {
-        from: process.env.SMTP_FROM || process.env.GMAIL_USER || 'noreply@urlshortener.com',
+        from: fromEmail,
         to: profile.email,
         subject: 'Password Reset Request - URL Shortener',
         html: `
@@ -371,11 +416,7 @@ app.post('/api/profiles/forgot-password', async (req, res) => {
         `
       };
 
-      // Verify connection before sending
-      await emailTransporter.verify();
-      console.log('✅ Email server connection verified');
-
-      await emailTransporter.sendMail(mailOptions);
+      await sendEmail(mailOptions);
       console.log('✅ Password reset email sent to:', profile.email);
     } catch (emailError) {
       console.error('❌ Error sending email:', emailError);
