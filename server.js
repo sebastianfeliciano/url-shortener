@@ -563,7 +563,12 @@ if (process.env.NODE_ENV === 'production') {
   app.use(express.static(path.join(__dirname, 'client/build')));
   
   // Catch-all handler: send back React's index.html file for any non-API routes
-  app.get('*', (req, res) => {
+  // This must come AFTER all API routes
+  app.get('*', (req, res, next) => {
+    // Skip API routes and short URL redirects (8-char codes)
+    if (req.path.startsWith('/api/') || /^\/[a-zA-Z0-9_-]{8}$/.test(req.path)) {
+      return next();
+    }
     res.sendFile(path.join(__dirname, 'client/build', 'index.html'));
   });
 }
