@@ -890,6 +890,31 @@ app.get('/api/health', (req, res) => {
   res.json({ status: 'OK', timestamp: new Date().toISOString() });
 });
 
+// GET /api/debug/user/:username - Debug endpoint to check user password status
+app.get('/api/debug/user/:username', async (req, res) => {
+  try {
+    const { username } = req.params;
+    const profile = await Profile.findOne({ username });
+    
+    if (!profile) {
+      return res.status(404).json({ error: 'User not found' });
+    }
+    
+    const isHashed = profile.password && (profile.password.startsWith('$2b$') || profile.password.startsWith('$2a$'));
+    
+    res.json({
+      username: profile.username,
+      email: profile.email,
+      passwordIsHashed: isHashed,
+      passwordLength: profile.password ? profile.password.length : 0,
+      passwordPrefix: profile.password ? profile.password.substring(0, 25) : 'none',
+      hasResetToken: !!profile.resetToken
+    });
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
 // Root path handler for development
 app.get('/', (req, res) => {
   res.json({
