@@ -538,51 +538,21 @@ app.post('/api/profiles/login', async (req, res) => {
     
     console.log('✅ User found:', profile.username);
 
-    // Debug: Check if password is hashed (should start with $2b$)
-    const isHashed = profile.password && (profile.password.startsWith('$2b$') || profile.password.startsWith('$2a$'));
-    console.log('🔍 Login attempt:', {
-      username: profile.username,
-      passwordIsHashed: isHashed,
-      passwordLength: profile.password ? profile.password.length : 0,
-      passwordPrefix: profile.password ? profile.password.substring(0, 15) : 'none',
-      inputPasswordLength: password ? password.length : 0
-    });
-
-    // Use bcrypt.compare correctly: bcrypt.compare(submittedPassword, storedUserHash)
     // Trim password to remove any whitespace
     const trimmedPassword = password.trim();
     
+    console.log('🔍 Login attempt:', {
+      username: profile.username,
+      passwordLength: profile.password ? profile.password.length : 0,
+      inputPasswordLength: trimmedPassword.length
+    });
+    
     const isMatch = await profile.comparePassword(trimmedPassword);
     console.log('🔍 Password comparison result:', isMatch);
-    console.log('🔍 Password details:', {
-      inputLength: trimmedPassword.length,
-      storedLength: profile.password ? profile.password.length : 0,
-      storedIsHashed: isHashed
-    });
     
     if (!isMatch) {
       console.log('❌ Login failed: Password mismatch for user:', username);
-      console.log('❌ Stored password type:', isHashed ? 'hashed' : 'plain text');
-      console.log('❌ Stored password starts with:', profile.password ? profile.password.substring(0, 20) : 'none');
-      
-      // If password is plain text, show what it is (for debugging)
-      if (!isHashed) {
-        console.log('❌ Stored plain text password:', profile.password);
-      }
-      
       return res.status(401).json({ error: 'Invalid credentials' });
-    }
-
-    // If password was plain text and login succeeded, re-hash it for security
-    if (!isHashed) {
-      console.log('⚠️ Re-hashing plain text password for user:', username);
-      try {
-        profile.password = await bcrypt.hash(password, 10);
-        await profile.save();
-        console.log('✅ Password re-hashed successfully');
-      } catch (hashError) {
-        console.error('❌ Error re-hashing password:', hashError);
-      }
     }
 
     console.log('✅ Login successful for:', username);
@@ -884,12 +854,10 @@ app.get('/api/debug/user/:username', async (req, res) => {
       return res.status(404).json({ error: 'User not found' });
     }
     
-    const isHashed = profile.password && (profile.password.startsWith('$2b$') || profile.password.startsWith('$2a$'));
-    
     res.json({
       username: profile.username,
       email: profile.email,
-      passwordIsHashed: isHashed,
+      passwordIsHashed: false, // No hashing - plain text only
       passwordLength: profile.password ? profile.password.length : 0,
       passwordPrefix: profile.password ? profile.password.substring(0, 25) : 'none',
       hasResetToken: !!profile.resetToken
