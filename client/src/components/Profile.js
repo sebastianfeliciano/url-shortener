@@ -5,8 +5,15 @@ const Profile = ({ onLoginStateChange }) => {
   const [isLoggedIn, setIsLoggedIn] = useState(false);
   const [user, setUser] = useState(null);
   const [username, setUsername] = useState('');
+  const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [isRegistering, setIsRegistering] = useState(false);
+  const [showForgotPassword, setShowForgotPassword] = useState(false);
+  const [showResetPassword, setShowResetPassword] = useState(false);
+  const [resetToken, setResetToken] = useState('');
+  const [newPassword, setNewPassword] = useState('');
+  const [confirmPassword, setConfirmPassword] = useState('');
+  const [successMessage, setSuccessMessage] = useState('');
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
   const [userUrls, setUserUrls] = useState([]);
@@ -21,6 +28,14 @@ const Profile = ({ onLoginStateChange }) => {
       setUser(userData);
       setIsLoggedIn(true);
       fetchUserUrls(userData.id);
+    }
+    
+    // Check for reset password token in URL
+    const urlParams = new URLSearchParams(window.location.search);
+    const token = urlParams.get('token');
+    if (token) {
+      setResetToken(token);
+      setShowResetPassword(true);
     }
   }, []);
 
@@ -68,7 +83,7 @@ const Profile = ({ onLoginStateChange }) => {
         headers: {
           'Content-Type': 'application/json',
         },
-        body: JSON.stringify({ username, password }),
+        body: JSON.stringify({ username, email, password }),
         signal: controller.signal
       });
 
@@ -87,6 +102,7 @@ const Profile = ({ onLoginStateChange }) => {
       setIsLoggedIn(true);
       localStorage.setItem('user', JSON.stringify(data));
       setUsername('');
+      setEmail('');
       setPassword('');
       setIsRegistering(false);
       fetchUserUrls(data.id);
@@ -155,6 +171,87 @@ const Profile = ({ onLoginStateChange }) => {
     }
   };
 
+  const handleForgotPassword = async (e) => {
+    e.preventDefault();
+    setError('');
+    setSuccessMessage('');
+    setLoading(true);
+
+    try {
+      const response = await fetch(`${config.API_BASE_URL}/api/profiles/forgot-password`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ email }),
+      });
+
+      const data = await response.json();
+
+      if (response.ok) {
+        setSuccessMessage(data.message || 'Password reset email sent! Check your inbox.');
+        setEmail('');
+        setShowForgotPassword(false);
+      } else {
+        setError(data.error || 'Failed to send reset email');
+      }
+    } catch (err) {
+      setError('Network error. Please try again.');
+      console.error('Forgot password error:', err);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleResetPassword = async (e) => {
+    e.preventDefault();
+    setError('');
+    setSuccessMessage('');
+
+    if (newPassword !== confirmPassword) {
+      setError('Passwords do not match');
+      return;
+    }
+
+    if (newPassword.length < 6) {
+      setError('Password must be at least 6 characters');
+      return;
+    }
+
+    setLoading(true);
+
+    try {
+      const response = await fetch(`${config.API_BASE_URL}/api/profiles/reset-password`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ token: resetToken, newPassword }),
+      });
+
+      const data = await response.json();
+
+      if (response.ok) {
+        setSuccessMessage(data.message || 'Password reset successfully! You can now login.');
+        setResetToken('');
+        setNewPassword('');
+        setConfirmPassword('');
+        setShowResetPassword(false);
+        // Redirect to login after 2 seconds
+        setTimeout(() => {
+          setShowForgotPassword(false);
+        }, 2000);
+      } else {
+        setError(data.error || 'Failed to reset password');
+      }
+    } catch (err) {
+      setError('Network error. Please try again.');
+      console.error('Reset password error:', err);
+    } finally {
+      setLoading(false);
+    }
+  };
+
   const handleLogout = () => {
     setIsLoggedIn(false);
     setUser(null);
@@ -174,6 +271,102 @@ const Profile = ({ onLoginStateChange }) => {
   };
 
   if (!isLoggedIn) {
+    // Reset Password Form
+    if (showResetPassword) {
+      return (
+        <div className="profile-container">
+          <h2>Reset Your Password</h2>
+          {error && <div className="error">{error}</div>}
+          {successMessage && <div className="success" style={{ color: 'green', marginBottom: '20px' }}>{successMessage}</div>}
+          <form onSubmit={handleResetPassword} className="auth-section">
+            <div className="form-group">
+              <label htmlFor="newPassword">New Password:</label>
+              <input
+                type="password"
+                id="newPassword"
+                value={newPassword}
+                onChange={(e) => setNewPassword(e.target.value)}
+                placeholder="At least 6 characters"
+                required
+                minLength={6}
+              />
+            </div>
+            <div className="form-group">
+              <label htmlFor="confirmPassword">Confirm Password:</label>
+              <input
+                type="password"
+                id="confirmPassword"
+                value={confirmPassword}
+                onChange={(e) => setConfirmPassword(e.target.value)}
+                placeholder="Confirm your new password"
+                required
+                minLength={6}
+              />
+            </div>
+            <button type="submit" className="btn" disabled={loading}>
+              {loading ? 'Processing...' : 'Reset Password'}
+            </button>
+            <button
+              type="button"
+              className="btn-secondary"
+              onClick={() => {
+                setShowResetPassword(false);
+                setResetToken('');
+                setNewPassword('');
+                setConfirmPassword('');
+                setError('');
+              }}
+              style={{ marginTop: '10px' }}
+            >
+              Cancel
+            </button>
+          </form>
+        </div>
+      );
+    }
+
+    // Forgot Password Form
+    if (showForgotPassword) {
+      return (
+        <div className="profile-container">
+          <h2>Forgot Password</h2>
+          <p style={{ marginBottom: '20px', opacity: 0.9 }}>Enter your email address and we'll send you a link to reset your password.</p>
+          {error && <div className="error">{error}</div>}
+          {successMessage && <div className="success" style={{ color: 'green', marginBottom: '20px' }}>{successMessage}</div>}
+          <form onSubmit={handleForgotPassword} className="auth-section">
+            <div className="form-group">
+              <label htmlFor="forgotEmail">Email:</label>
+              <input
+                type="email"
+                id="forgotEmail"
+                value={email}
+                onChange={(e) => setEmail(e.target.value)}
+                placeholder="Enter your email"
+                required
+              />
+            </div>
+            <button type="submit" className="btn" disabled={loading}>
+              {loading ? 'Sending...' : 'Send Reset Link'}
+            </button>
+            <button
+              type="button"
+              className="btn-secondary"
+              onClick={() => {
+                setShowForgotPassword(false);
+                setEmail('');
+                setError('');
+                setSuccessMessage('');
+              }}
+              style={{ marginTop: '10px' }}
+            >
+              Back to Login
+            </button>
+          </form>
+        </div>
+      );
+    }
+
+    // Login/Register Form
     return (
       <div className="profile-container">
         <h2>Welcome to URL Shortener</h2>
@@ -185,6 +378,7 @@ const Profile = ({ onLoginStateChange }) => {
               onClick={() => {
                 setIsRegistering(false);
                 setError('');
+                setSuccessMessage('');
               }}
             >
               Sign In
@@ -194,6 +388,7 @@ const Profile = ({ onLoginStateChange }) => {
               onClick={() => {
                 setIsRegistering(true);
                 setError('');
+                setSuccessMessage('');
               }}
             >
               Sign Up
@@ -201,6 +396,7 @@ const Profile = ({ onLoginStateChange }) => {
           </div>
 
           {error && <div className="error">{error}</div>}
+          {successMessage && <div className="success" style={{ color: 'green', marginBottom: '20px' }}>{successMessage}</div>}
 
           <form onSubmit={isRegistering ? handleRegister : handleLogin}>
             <div className="form-group">
@@ -214,6 +410,19 @@ const Profile = ({ onLoginStateChange }) => {
                 required
               />
             </div>
+            {isRegistering && (
+              <div className="form-group">
+                <label htmlFor="email">Email:</label>
+                <input
+                  type="email"
+                  id="email"
+                  value={email}
+                  onChange={(e) => setEmail(e.target.value)}
+                  placeholder="Enter your email"
+                  required
+                />
+              </div>
+            )}
             <div className="form-group">
               <label htmlFor="password">Password:</label>
               <input
@@ -229,6 +438,27 @@ const Profile = ({ onLoginStateChange }) => {
             <button type="submit" className="btn" disabled={loading}>
               {loading ? 'Processing...' : isRegistering ? 'Sign Up' : 'Sign In'}
             </button>
+            {!isRegistering && (
+              <button
+                type="button"
+                onClick={() => {
+                  setShowForgotPassword(true);
+                  setError('');
+                  setSuccessMessage('');
+                }}
+                style={{
+                  marginTop: '15px',
+                  background: 'none',
+                  border: 'none',
+                  color: '#6f42c1',
+                  cursor: 'pointer',
+                  textDecoration: 'underline',
+                  fontSize: '14px'
+                }}
+              >
+                Forgot Password?
+              </button>
+            )}
           </form>
         </div>
       </div>

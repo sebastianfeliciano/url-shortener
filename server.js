@@ -7,6 +7,7 @@ const { nanoid } = require('nanoid');
 const QRCode = require('qrcode');
 const { LRUCache } = require('lru-cache');
 const bcrypt = require('bcryptjs');
+const nodemailer = require('nodemailer');
 const path = require('path');
 require('dotenv').config();
 
@@ -96,7 +97,10 @@ if (mongoose.connection.readyState === 0) {
 // Profile Schema
 const profileSchema = new mongoose.Schema({
   username: { type: String, required: true, unique: true, trim: true },
+  email: { type: String, required: true, unique: true, trim: true, lowercase: true },
   password: { type: String, required: true },
+  resetToken: { type: String },
+  resetTokenExpiry: { type: Date },
   createdAt: { type: Date, default: Date.now }
 });
 
@@ -169,6 +173,55 @@ function isValidUrl(string) {
   }
 }
 
+// Validate Email
+function isValidEmail(email) {
+  const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+  return emailRegex.test(email);
+}
+
+// Setup email transporter (using Gmail or environment variables)
+const createEmailTransporter = () => {
+  // For production, use environment variables
+  if (process.env.SMTP_HOST && process.env.SMTP_USER && process.env.SMTP_PASS) {
+    return nodemailer.createTransport({
+      host: process.env.SMTP_HOST,
+      port: process.env.SMTP_PORT || 587,
+      secure: process.env.SMTP_SECURE === 'true',
+      auth: {
+        user: process.env.SMTP_USER,
+        pass: process.env.SMTP_PASS
+      }
+    });
+  }
+  
+  // For development/testing, use Gmail (requires app password)
+  // You can also use services like SendGrid, Mailgun, etc.
+  if (process.env.GMAIL_USER && process.env.GMAIL_PASS) {
+    return nodemailer.createTransport({
+      service: 'gmail',
+      auth: {
+        user: process.env.GMAIL_USER,
+        pass: process.env.GMAIL_PASS
+      }
+    });
+  }
+  
+  // Fallback: log email instead of sending (for development)
+  return {
+    sendMail: async (options) => {
+      console.log('📧 Email would be sent:', {
+        to: options.to,
+        subject: options.subject,
+        text: options.text,
+        html: options.html
+      });
+      return { messageId: 'dev-mode' };
+    }
+  };
+};
+
+const emailTransporter = createEmailTransporter();
+
 // POST /api/profiles/register - Register a new profile
 app.post('/api/profiles/register', async (req, res) => {
   try {
@@ -179,22 +232,31 @@ app.post('/api/profiles/register', async (req, res) => {
       });
     }
 
-    const { username, password } = req.body;
+    const { username, email, password } = req.body;
 
-    if (!username || !password) {
-      return res.status(400).json({ error: 'Username and password are required' });
+    if (!username || !email || !password) {
+      return res.status(400).json({ error: 'Username, email, and password are required' });
+    }
+
+    if (!isValidEmail(email)) {
+      return res.status(400).json({ error: 'Invalid email format' });
     }
 
     if (password.length < 6) {
       return res.status(400).json({ error: 'Password must be at least 6 characters' });
     }
 
-    const existingProfile = await Profile.findOne({ username });
+    const existingProfile = await Profile.findOne({ 
+      $or: [{ username }, { email }] 
+    });
     if (existingProfile) {
-      return res.status(409).json({ error: 'Username already exists' });
+      if (existingProfile.username === username) {
+        return res.status(409).json({ error: 'Username already exists' });
+      }
+      return res.status(409).json({ error: 'Email already registered' });
     }
 
-    const profile = new Profile({ username, password });
+    const profile = new Profile({ username, email, password });
     
     try {
       await profile.save();
@@ -212,14 +274,148 @@ app.post('/api/profiles/register', async (req, res) => {
     res.status(201).json({
       id: profile._id,
       username: profile.username,
+      email: profile.email,
       createdAt: profile.createdAt
     });
   } catch (error) {
     console.error('Error registering profile:', error);
     if (error.name === 'MongoServerError' && error.code === 11000) {
-      return res.status(409).json({ error: 'Username already exists' });
+      const field = Object.keys(error.keyPattern)[0];
+      return res.status(409).json({ 
+        error: field === 'email' ? 'Email already registered' : 'Username already exists' 
+      });
     }
     res.status(500).json({ error: error.message || 'Internal server error' });
+  }
+});
+
+// POST /api/profiles/forgot-password - Request password reset
+app.post('/api/profiles/forgot-password', async (req, res) => {
+  try {
+    if (mongoose.connection.readyState !== 1) {
+      return res.status(503).json({ 
+        error: 'Database connection unavailable.' 
+      });
+    }
+
+    const { email } = req.body;
+
+    if (!email) {
+      return res.status(400).json({ error: 'Email is required' });
+    }
+
+    if (!isValidEmail(email)) {
+      return res.status(400).json({ error: 'Invalid email format' });
+    }
+
+    const profile = await Profile.findOne({ email: email.toLowerCase() });
+    
+    // Don't reveal if email exists or not (security best practice)
+    if (!profile) {
+      // Still return success to prevent email enumeration
+      return res.status(200).json({ 
+        message: 'If that email exists, a password reset link has been sent.' 
+      });
+    }
+
+    // Generate reset token
+    const resetToken = nanoid(32);
+    const resetTokenExpiry = new Date();
+    resetTokenExpiry.setHours(resetTokenExpiry.getHours() + 1); // Token valid for 1 hour
+
+    profile.resetToken = resetToken;
+    profile.resetTokenExpiry = resetTokenExpiry;
+    await profile.save();
+
+    // Send reset email
+    const resetUrl = `${BASE_URL}/reset-password?token=${resetToken}`;
+    
+    try {
+      await emailTransporter.sendMail({
+        from: process.env.SMTP_FROM || process.env.GMAIL_USER || 'noreply@urlshortener.com',
+        to: profile.email,
+        subject: 'Password Reset Request - URL Shortener',
+        html: `
+          <h2>Password Reset Request</h2>
+          <p>Hello ${profile.username},</p>
+          <p>You requested to reset your password. Click the link below to reset it:</p>
+          <p><a href="${resetUrl}" style="background-color: #6f42c1; color: white; padding: 10px 20px; text-decoration: none; border-radius: 5px;">Reset Password</a></p>
+          <p>Or copy and paste this URL into your browser:</p>
+          <p>${resetUrl}</p>
+          <p>This link will expire in 1 hour.</p>
+          <p>If you didn't request this, please ignore this email.</p>
+        `,
+        text: `
+          Password Reset Request
+          
+          Hello ${profile.username},
+          
+          You requested to reset your password. Use this link to reset it:
+          ${resetUrl}
+          
+          This link will expire in 1 hour.
+          
+          If you didn't request this, please ignore this email.
+        `
+      });
+
+      console.log('✅ Password reset email sent to:', profile.email);
+    } catch (emailError) {
+      console.error('❌ Error sending email:', emailError);
+      // Don't fail the request if email fails, but log it
+    }
+
+    res.status(200).json({ 
+      message: 'If that email exists, a password reset link has been sent.' 
+    });
+  } catch (error) {
+    console.error('Error in forgot password:', error);
+    res.status(500).json({ error: 'Internal server error' });
+  }
+});
+
+// POST /api/profiles/reset-password - Reset password with token
+app.post('/api/profiles/reset-password', async (req, res) => {
+  try {
+    if (mongoose.connection.readyState !== 1) {
+      return res.status(503).json({ 
+        error: 'Database connection unavailable.' 
+      });
+    }
+
+    const { token, newPassword } = req.body;
+
+    if (!token || !newPassword) {
+      return res.status(400).json({ error: 'Token and new password are required' });
+    }
+
+    if (newPassword.length < 6) {
+      return res.status(400).json({ error: 'Password must be at least 6 characters' });
+    }
+
+    const profile = await Profile.findOne({
+      resetToken: token,
+      resetTokenExpiry: { $gt: new Date() } // Token not expired
+    });
+
+    if (!profile) {
+      return res.status(400).json({ error: 'Invalid or expired reset token' });
+    }
+
+    // Update password
+    profile.password = newPassword;
+    profile.resetToken = undefined;
+    profile.resetTokenExpiry = undefined;
+    await profile.save();
+
+    console.log('✅ Password reset successful for:', profile.username);
+
+    res.status(200).json({ 
+      message: 'Password has been reset successfully. You can now login with your new password.' 
+    });
+  } catch (error) {
+    console.error('Error resetting password:', error);
+    res.status(500).json({ error: 'Internal server error' });
   }
 });
 
