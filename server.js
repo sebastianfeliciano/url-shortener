@@ -48,6 +48,10 @@ if (!BASE_URL) {
   }
 }
 
+// Frontend URL for password reset links (points to Vercel frontend)
+// Falls back to BASE_URL if not set (for full-stack deployments)
+let FRONTEND_URL = process.env.FRONTEND_URL || process.env.REACT_APP_API_URL || BASE_URL;
+
 // Log the detected IP for reference
 console.log('Server running on:', BASE_URL);
 console.log('Environment:', process.env.NODE_ENV || 'development');
@@ -382,8 +386,8 @@ app.post('/api/profiles/forgot-password', async (req, res) => {
     profile.resetTokenExpiry = resetTokenExpiry;
     await profile.save();
 
-    // Send reset email
-    const resetUrl = `${BASE_URL}/reset-password?token=${resetToken}`;
+    // Send reset email - use FRONTEND_URL so link goes to Vercel frontend
+    const resetUrl = `${FRONTEND_URL}/reset-password?token=${resetToken}`;
     
       try {
       const fromEmail = process.env.SENDGRID_FROM || process.env.SMTP_FROM || process.env.GMAIL_USER || 'noreply@urlshortener.com';
