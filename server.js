@@ -6,6 +6,7 @@ const rateLimit = require('express-rate-limit');
 const { nanoid } = require('nanoid');
 const QRCode = require('qrcode');
 const { LRUCache } = require('lru-cache');
+const bcrypt = require('bcryptjs');
 const path = require('path');
 require('dotenv').config();
 
@@ -29,10 +30,25 @@ function getLocalIP() {
 }
 
 const LOCAL_IP = getLocalIP();
-const BASE_URL = process.env.BASE_URL || `http://${LOCAL_IP}:${PORT}`;
+
+// Use environment variable for BASE_URL, or detect from cloud provider
+// For deployment, this will auto-detect from VERCEL_URL, RAILWAY_PUBLIC_DOMAIN, or RENDER_EXTERNAL_URL
+let BASE_URL = process.env.BASE_URL;
+if (!BASE_URL) {
+  if (process.env.VERCEL_URL) {
+    BASE_URL = `https://${process.env.VERCEL_URL}`;
+  } else if (process.env.RAILWAY_PUBLIC_DOMAIN) {
+    BASE_URL = `https://${process.env.RAILWAY_PUBLIC_DOMAIN}`;
+  } else if (process.env.RENDER_EXTERNAL_URL) {
+    BASE_URL = process.env.RENDER_EXTERNAL_URL;
+  } else {
+    BASE_URL = `http://${LOCAL_IP}:${PORT}`;
+  }
+}
 
 // Log the detected IP for reference
 console.log('Server running on:', BASE_URL);
+console.log('Environment:', process.env.NODE_ENV || 'development');
 
 // Security middleware
 app.use(helmet());
@@ -52,12 +68,58 @@ const urlCache = new LRUCache({
   ttl: 1000 * 60 * 60 // 1 hour
 });
 
-// MongoDB connection - Using shared Atlas database
-const MONGODB_URI = process.env.MONGODB_URI || 'mongodb+srv://snfelexstudents2025_db_user:9vvR5qZVJGqWJ0Vt@urlshortener.nay4npn.mongodb.net/?retryWrites=true&w=majority&appName=urlshortener';
+// MongoDB connection - Using Atlas database
+const MONGODB_URI = process.env.MONGODB_URI || 'mongodb+srv://giuseppi:supersecretpassword@kambaz.auzwwz1.mongodb.net/urlshortener?retryWrites=true&w=majority';
 
 mongoose.connect(MONGODB_URI, {
   useNewUrlParser: true,
   useUnifiedTopology: true,
+}).then(() => {
+  console.log('MongoDB connected successfully');
+  console.log('Database:', mongoose.connection.db.databaseName);
+  console.log('Collections:', mongoose.connection.db.listCollections().toArray().then(cols => {
+    console.log('Available collections:', cols.map(c => c.name));
+  }));
+}).catch((error) => {
+  console.error('MongoDB connection error:', error);
+  console.error('Connection string:', MONGODB_URI.replace(/:[^:@]+@/, ':****@')); // Hide password
+});
+
+// Profile Schema
+const profileSchema = new mongoose.Schema({
+  username: { type: String, required: true, unique: true, trim: true },
+  password: { type: String, required: true },
+  createdAt: { type: Date, default: Date.now }
+});
+
+// Hash password before saving
+profileSchema.pre('save', async function(next) {
+  if (!this.isModified('password')) return next();
+  this.password = await bcrypt.hash(this.password, 10);
+  next();
+});
+
+// Method to compare password
+profileSchema.methods.comparePassword = async function(candidatePassword) {
+  return bcrypt.compare(candidatePassword, this.password);
+};
+
+const Profile = mongoose.model('Profile', profileSchema);
+
+// Ensure Profile collection exists
+mongoose.connection.once('open', async () => {
+  try {
+    const collections = await mongoose.connection.db.listCollections().toArray();
+    const collectionNames = collections.map(c => c.name);
+    console.log('Existing collections:', collectionNames);
+    
+    if (!collectionNames.includes('profiles')) {
+      console.log('Creating profiles collection...');
+      // The collection will be created automatically on first save
+    }
+  } catch (error) {
+    console.error('Error checking collections:', error);
+  }
 });
 
 // URL Schema
@@ -67,7 +129,8 @@ const urlSchema = new mongoose.Schema({
   createdAt: { type: Date, default: Date.now },
   clickCount: { type: Number, default: 0 },
   lastAccessed: { type: Date },
-  qrCode: { type: String }
+  qrCode: { type: String },
+  profileId: { type: mongoose.Schema.Types.ObjectId, ref: 'Profile', default: null }
 });
 
 const Url = mongoose.model('Url', urlSchema);
@@ -98,10 +161,153 @@ function isValidUrl(string) {
   }
 }
 
+// POST /api/profiles/register - Register a new profile
+app.post('/api/profiles/register', async (req, res) => {
+  try {
+    // Check MongoDB connection
+    if (mongoose.connection.readyState !== 1) {
+      return res.status(503).json({ 
+        error: 'Database connection unavailable. Please check MongoDB connection settings.' 
+      });
+    }
+
+    const { username, password } = req.body;
+
+    if (!username || !password) {
+      return res.status(400).json({ error: 'Username and password are required' });
+    }
+
+    if (password.length < 6) {
+      return res.status(400).json({ error: 'Password must be at least 6 characters' });
+    }
+
+    const existingProfile = await Profile.findOne({ username });
+    if (existingProfile) {
+      return res.status(409).json({ error: 'Username already exists' });
+    }
+
+    const profile = new Profile({ username, password });
+    
+    try {
+      await profile.save();
+      console.log('✅ Profile saved successfully:', {
+        id: profile._id.toString(),
+        username: profile.username,
+        collection: Profile.collection.name,
+        database: mongoose.connection.db.databaseName
+      });
+    } catch (saveError) {
+      console.error('❌ Error saving profile:', saveError);
+      throw saveError;
+    }
+
+    res.status(201).json({
+      id: profile._id,
+      username: profile.username,
+      createdAt: profile.createdAt
+    });
+  } catch (error) {
+    console.error('Error registering profile:', error);
+    if (error.name === 'MongoServerError' && error.code === 11000) {
+      return res.status(409).json({ error: 'Username already exists' });
+    }
+    res.status(500).json({ error: error.message || 'Internal server error' });
+  }
+});
+
+// POST /api/profiles/login - Authenticate a profile
+app.post('/api/profiles/login', async (req, res) => {
+  try {
+    // Check MongoDB connection
+    if (mongoose.connection.readyState !== 1) {
+      return res.status(503).json({ 
+        error: 'Database connection unavailable. Please check MongoDB connection settings.' 
+      });
+    }
+
+    const { username, password } = req.body;
+
+    if (!username || !password) {
+      return res.status(400).json({ error: 'Username and password are required' });
+    }
+
+    const profile = await Profile.findOne({ username });
+    if (!profile) {
+      return res.status(401).json({ error: 'Invalid credentials' });
+    }
+
+    const isMatch = await profile.comparePassword(password);
+    if (!isMatch) {
+      return res.status(401).json({ error: 'Invalid credentials' });
+    }
+
+    res.json({
+      id: profile._id,
+      username: profile.username,
+      createdAt: profile.createdAt
+    });
+  } catch (error) {
+    console.error('Error logging in:', error);
+    res.status(500).json({ error: error.message || 'Internal server error' });
+  }
+});
+
+// GET /api/profiles/:id/urls - Get all URLs for a profile
+app.get('/api/profiles/:id/urls', async (req, res) => {
+  try {
+    const { id } = req.params;
+
+    const urls = await Url.find({ profileId: id })
+      .sort({ createdAt: -1 })
+      .select('shortUrl longUrl clickCount createdAt lastAccessed qrCode');
+
+    res.json(urls);
+  } catch (error) {
+    console.error('Error fetching profile URLs:', error);
+    res.status(500).json({ error: 'Internal server error' });
+  }
+});
+
+// GET /api/profiles/:id/analytics - Get analytics for all URLs of a profile
+app.get('/api/profiles/:id/analytics', async (req, res) => {
+  try {
+    const { id } = req.params;
+
+    const urls = await Url.find({ profileId: id }).select('shortUrl');
+    const shortUrls = urls.map(url => url.shortUrl);
+
+    const analytics = await Analytics.find({ shortUrl: { $in: shortUrls } })
+      .sort({ timestamp: -1 })
+      .limit(100);
+
+    const totalClicks = analytics.length;
+    const totalUrls = urls.length;
+    const totalClicksPerUrl = urls.reduce((sum, url) => sum + url.clickCount, 0);
+
+    res.json({
+      profileId: id,
+      totalUrls,
+      totalClicks,
+      totalClicksPerUrl,
+      recentClicks: analytics.slice(0, 20),
+      urls: urls.map(url => ({
+        shortUrl: url.shortUrl,
+        longUrl: url.longUrl,
+        clickCount: url.clickCount,
+        createdAt: url.createdAt,
+        lastAccessed: url.lastAccessed
+      }))
+    });
+  } catch (error) {
+    console.error('Error fetching profile analytics:', error);
+    res.status(500).json({ error: 'Internal server error' });
+  }
+});
+
 // POST /create - Create short URL
 app.post('/api/create', async (req, res) => {
   try {
-    const { longUrl } = req.body;
+    const { longUrl, profileId } = req.body;
 
     if (!longUrl) {
       return res.status(400).json({ error: 'Long URL is required' });
@@ -140,7 +346,8 @@ app.post('/api/create', async (req, res) => {
     const newUrl = new Url({
       shortUrl,
       longUrl,
-      qrCode: qrCodeDataURL
+      qrCode: qrCodeDataURL,
+      profileId: profileId || null
     });
 
     await newUrl.save();
@@ -261,18 +468,33 @@ app.get('/api/analytics/:shortUrl', async (req, res) => {
   }
 });
 
-// GET /api/stats - Get overall statistics
+// GET /api/stats - Get overall statistics (filtered by profileId if provided)
 app.get('/api/stats', async (req, res) => {
   try {
-    const totalUrls = await Url.countDocuments();
-    const totalClicks = await Analytics.countDocuments();
+    const { profileId } = req.query;
+    
+    let totalUrls, totalClicks;
+    
+    if (profileId) {
+      // Get stats for specific user
+      totalUrls = await Url.countDocuments({ profileId });
+      const userUrls = await Url.find({ profileId }).select('shortUrl');
+      const shortUrls = userUrls.map(url => url.shortUrl);
+      totalClicks = await Analytics.countDocuments({ shortUrl: { $in: shortUrls } });
+    } else {
+      // Get global stats
+      totalUrls = await Url.countDocuments();
+      totalClicks = await Analytics.countDocuments();
+    }
+    
     const cacheSize = urlCache.size;
 
     res.json({
       totalUrls,
       totalClicks,
       cacheSize,
-      cacheHitRate: 'N/A' // Could be implemented with more sophisticated tracking
+      cacheHitRate: 'N/A', // Could be implemented with more sophisticated tracking
+      isUserStats: !!profileId
     });
 
   } catch (error) {
@@ -281,10 +503,15 @@ app.get('/api/stats', async (req, res) => {
   }
 });
 
-// GET /api/urls - Get all URLs
+// GET /api/urls - Get all URLs (filtered by profileId if provided)
 app.get('/api/urls', async (req, res) => {
   try {
-    const urls = await Url.find({}, 'shortUrl longUrl clickCount createdAt lastAccessed')
+    const { profileId } = req.query;
+    
+    // Build query - if profileId provided, only get that user's URLs
+    const query = profileId ? { profileId } : {};
+    
+    const urls = await Url.find(query, 'shortUrl longUrl clickCount createdAt lastAccessed profileId')
       .sort({ createdAt: -1 })
       .limit(100); // Limit to prevent large responses
 
@@ -311,7 +538,13 @@ app.get('/', (req, res) => {
       analytics: 'GET /api/analytics/:shortUrl',
       stats: 'GET /api/stats',
       health: 'GET /api/health',
-      redirect: 'GET /:shortUrl'
+      redirect: 'GET /:shortUrl',
+      profiles: {
+        register: 'POST /api/profiles/register',
+        login: 'POST /api/profiles/login',
+        getUrls: 'GET /api/profiles/:id/urls',
+        getAnalytics: 'GET /api/profiles/:id/analytics'
+      }
     },
     documentation: 'Visit http://localhost:3000 for the frontend interface'
   });
@@ -327,8 +560,30 @@ if (process.env.NODE_ENV === 'production') {
   });
 }
 
-// Start the server
-app.listen(PORT, () => {
-  console.log(`Server running on port ${PORT}`);
-  console.log(`Environment: ${process.env.NODE_ENV || 'development'}`);
-});
+// Start the server (only if not in serverless environment like Vercel)
+// Vercel will handle the serverless function, so we don't need to listen
+if (process.env.VERCEL !== '1' && !process.env.RAILWAY_ENVIRONMENT && !process.env.RENDER) {
+  app.listen(PORT, () => {
+    console.log(`Server running on port ${PORT}`);
+    console.log(`Environment: ${process.env.NODE_ENV || 'development'}`);
+    console.log(`MongoDB URI: ${MONGODB_URI.replace(/:[^:@]+@/, ':****@')}`);
+    console.log(`Base URL: ${BASE_URL}`);
+  }).on('error', (err) => {
+    if (err.code === 'EADDRINUSE') {
+      console.error(`❌ Port ${PORT} is already in use. Please kill the process using this port.`);
+      console.error(`   Run: lsof -ti:${PORT} | xargs kill -9`);
+      process.exit(1);
+    } else {
+      console.error('Server error:', err);
+      process.exit(1);
+    }
+  });
+} else {
+  // Serverless environment - just log
+  console.log('Serverless environment detected');
+  console.log(`Base URL: ${BASE_URL}`);
+  console.log(`MongoDB URI: ${MONGODB_URI.replace(/:[^:@]+@/, ':****@')}`);
+}
+
+// Export for Vercel serverless functions
+module.exports = app;
