@@ -538,11 +538,21 @@ app.post('/api/profiles/login', async (req, res) => {
       return res.status(400).json({ error: 'Username and password are required' });
     }
 
-    const profile = await Profile.findOne({ username });
+    // Try to find user - check both exact match and case-insensitive
+    let profile = await Profile.findOne({ username });
+    if (!profile) {
+      // Try case-insensitive search
+      profile = await Profile.findOne({ 
+        username: { $regex: new RegExp(`^${username}$`, 'i') } 
+      });
+    }
+    
     if (!profile) {
       console.log('❌ Login failed: User not found:', username);
       return res.status(401).json({ error: 'Invalid credentials' });
     }
+    
+    console.log('✅ User found:', profile.username);
 
     // Debug: Check if password is hashed (should start with $2b$)
     const isHashed = profile.password && (profile.password.startsWith('$2b$') || profile.password.startsWith('$2a$'));
@@ -555,12 +565,27 @@ app.post('/api/profiles/login', async (req, res) => {
     });
 
     // Use bcrypt.compare correctly: bcrypt.compare(submittedPassword, storedUserHash)
-    const isMatch = await profile.comparePassword(password);
+    // Trim password to remove any whitespace
+    const trimmedPassword = password.trim();
+    
+    const isMatch = await profile.comparePassword(trimmedPassword);
     console.log('🔍 Password comparison result:', isMatch);
+    console.log('🔍 Password details:', {
+      inputLength: trimmedPassword.length,
+      storedLength: profile.password ? profile.password.length : 0,
+      storedIsHashed: isHashed
+    });
     
     if (!isMatch) {
       console.log('❌ Login failed: Password mismatch for user:', username);
       console.log('❌ Stored password type:', isHashed ? 'hashed' : 'plain text');
+      console.log('❌ Stored password starts with:', profile.password ? profile.password.substring(0, 20) : 'none');
+      
+      // If password is plain text, show what it is (for debugging)
+      if (!isHashed) {
+        console.log('❌ Stored plain text password:', profile.password);
+      }
+      
       return res.status(401).json({ error: 'Invalid credentials' });
     }
 
