@@ -135,7 +135,7 @@ const Profile = ({ onLoginStateChange }) => {
         headers: {
           'Content-Type': 'application/json',
         },
-        body: JSON.stringify({ username, password }),
+        body: JSON.stringify({ username: username.trim(), password: password.trim() }),
         signal: controller.signal
       });
 
@@ -226,7 +226,7 @@ const Profile = ({ onLoginStateChange }) => {
         headers: {
           'Content-Type': 'application/json',
         },
-        body: JSON.stringify({ token: resetToken, newPassword }),
+        body: JSON.stringify({ token: resetToken, newPassword: newPassword.trim() }),
       });
 
       const data = await response.json();

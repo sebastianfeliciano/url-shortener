@@ -959,6 +959,45 @@ app.get('/api/debug/user/:username', async (req, res) => {
   }
 });
 
+// POST /api/debug/test-password/:username - Test if a password matches (development only)
+app.post('/api/debug/test-password/:username', async (req, res) => {
+  try {
+    const { username } = req.params;
+    const { testPassword } = req.body;
+    
+    if (!testPassword) {
+      return res.status(400).json({ error: 'testPassword is required' });
+    }
+    
+    const profile = await Profile.findOne({ username });
+    
+    if (!profile) {
+      return res.status(404).json({ error: 'User not found' });
+    }
+    
+    const isHashed = profile.password && (profile.password.startsWith('$2b$') || profile.password.startsWith('$2a$'));
+    
+    let matchResult = false;
+    if (isHashed) {
+      matchResult = await bcrypt.compare(testPassword.trim(), profile.password);
+    } else {
+      matchResult = profile.password === testPassword.trim();
+    }
+    
+    res.json({
+      username: profile.username,
+      passwordIsHashed: isHashed,
+      testPasswordLength: testPassword.length,
+      testPasswordTrimmedLength: testPassword.trim().length,
+      storedPasswordLength: profile.password ? profile.password.length : 0,
+      passwordMatches: matchResult,
+      storedPasswordPrefix: profile.password ? profile.password.substring(0, 30) : 'none'
+    });
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
 // Root path handler for development
 app.get('/', (req, res) => {
   res.json({
