@@ -119,8 +119,12 @@ profileSchema.pre('save', async function(next) {
 // Method to compare password
 profileSchema.methods.comparePassword = async function(candidatePassword) {
   if (!this.password || !candidatePassword) {
+    console.log('❌ comparePassword: Missing password or candidate');
     return false;
   }
+  
+  // Trim candidate password to remove any whitespace
+  const trimmedCandidate = candidatePassword.trim();
   
   // Check if password is hashed (starts with $2b$)
   const isHashed = this.password.startsWith('$2b$') || this.password.startsWith('$2a$');
@@ -128,7 +132,7 @@ profileSchema.methods.comparePassword = async function(candidatePassword) {
   if (!isHashed) {
     // Password is stored as plain text (legacy issue) - compare directly
     console.warn('⚠️ Password stored as plain text for user:', this.username);
-    const match = this.password === candidatePassword;
+    const match = this.password === trimmedCandidate;
     if (match) {
       console.log('✅ Plain text password match - will re-hash after login');
     }
@@ -137,10 +141,32 @@ profileSchema.methods.comparePassword = async function(candidatePassword) {
   
   // Use bcrypt.compare correctly: bcrypt.compare(submittedPassword, storedUserHash)
   try {
-    const isMatch = await bcrypt.compare(candidatePassword, this.password);
+    console.log('🔍 comparePassword: Comparing', {
+      candidateLength: trimmedCandidate.length,
+      storedLength: this.password.length,
+      storedPrefix: this.password.substring(0, 20)
+    });
+    
+    const isMatch = await bcrypt.compare(trimmedCandidate, this.password);
+    
+    console.log('🔍 comparePassword result:', isMatch);
+    
+    if (!isMatch) {
+      // Try comparing with original (non-trimmed) in case that's the issue
+      const isMatchOriginal = await bcrypt.compare(candidatePassword, this.password);
+      if (isMatchOriginal) {
+        console.log('⚠️ Password match found with non-trimmed version');
+        return true;
+      }
+    }
+    
     return isMatch;
   } catch (error) {
     console.error('❌ Error comparing password:', error);
+    console.error('Error details:', {
+      message: error.message,
+      stack: error.stack
+    });
     return false;
   }
 };
@@ -496,22 +522,40 @@ app.post('/api/profiles/reset-password', async (req, res) => {
 
     // Update password - hash it directly to ensure it's saved correctly
     const saltRounds = 10;
-    const newHashedPassword = await bcrypt.hash(newPassword, saltRounds);
+    const trimmedNewPassword = newPassword.trim();
+    const newHashedPassword = await bcrypt.hash(trimmedNewPassword, saltRounds);
+    
+    // Verify the hash works BEFORE saving
+    const testCompare = await bcrypt.compare(trimmedNewPassword, newHashedPassword);
+    if (!testCompare) {
+      console.error('❌ CRITICAL: Hash verification failed before saving!');
+      return res.status(500).json({ error: 'Password hashing failed' });
+    }
+    console.log('✅ Hash verification passed before saving');
     
     profile.password = newHashedPassword;
     profile.resetToken = undefined;
     profile.resetTokenExpiry = undefined;
     await profile.save();
 
-    // Verify the password was saved correctly
+    // Verify the password was saved correctly and can be compared
     const verifyProfile = await Profile.findById(profile._id);
     const passwordIsHashed = verifyProfile.password && verifyProfile.password.startsWith('$2b$');
+    
+    // Test that we can compare the saved password
+    const verifyCompare = await bcrypt.compare(trimmedNewPassword, verifyProfile.password);
     console.log('✅ Password reset successful for:', profile.username);
     console.log('🔍 Password verification:', {
       username: profile.username,
       passwordIsHashed: passwordIsHashed,
-      passwordLength: verifyProfile.password ? verifyProfile.password.length : 0
+      passwordLength: verifyProfile.password ? verifyProfile.password.length : 0,
+      hashMatches: verifyCompare,
+      passwordPrefix: verifyProfile.password ? verifyProfile.password.substring(0, 20) : 'none'
     });
+    
+    if (!verifyCompare) {
+      console.error('❌ CRITICAL: Saved password hash does not match!');
+    }
 
     res.status(200).json({ 
       message: 'Password has been reset successfully. You can now login with your new password.' 
