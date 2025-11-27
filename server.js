@@ -109,66 +109,29 @@ const profileSchema = new mongoose.Schema({
   createdAt: { type: Date, default: Date.now }
 });
 
-// Hash password before saving
-profileSchema.pre('save', async function(next) {
-  if (!this.isModified('password')) return next();
-  this.password = await bcrypt.hash(this.password, 10);
-  next();
-});
+// NO PASSWORD HASHING - Storing passwords as plain text (NOT RECOMMENDED FOR PRODUCTION)
+// This is a temporary solution to fix login issues
 
-// Method to compare password
+// Method to compare password (plain text comparison)
 profileSchema.methods.comparePassword = async function(candidatePassword) {
   if (!this.password || !candidatePassword) {
     console.log('❌ comparePassword: Missing password or candidate');
     return false;
   }
   
-  // Trim candidate password to remove any whitespace
+  // Trim both passwords for comparison
+  const trimmedStored = this.password.trim();
   const trimmedCandidate = candidatePassword.trim();
   
-  // Check if password is hashed (starts with $2b$)
-  const isHashed = this.password.startsWith('$2b$') || this.password.startsWith('$2a$');
+  const match = trimmedStored === trimmedCandidate;
+  console.log('🔍 Plain text password comparison:', {
+    username: this.username,
+    storedLength: trimmedStored.length,
+    candidateLength: trimmedCandidate.length,
+    match: match
+  });
   
-  if (!isHashed) {
-    // Password is stored as plain text (legacy issue) - compare directly
-    console.warn('⚠️ Password stored as plain text for user:', this.username);
-    const match = this.password === trimmedCandidate;
-    if (match) {
-      console.log('✅ Plain text password match - will re-hash after login');
-    }
-    return match;
-  }
-  
-  // Use bcrypt.compare correctly: bcrypt.compare(submittedPassword, storedUserHash)
-  try {
-    console.log('🔍 comparePassword: Comparing', {
-      candidateLength: trimmedCandidate.length,
-      storedLength: this.password.length,
-      storedPrefix: this.password.substring(0, 20)
-    });
-    
-    const isMatch = await bcrypt.compare(trimmedCandidate, this.password);
-    
-    console.log('🔍 comparePassword result:', isMatch);
-    
-    if (!isMatch) {
-      // Try comparing with original (non-trimmed) in case that's the issue
-      const isMatchOriginal = await bcrypt.compare(candidatePassword, this.password);
-      if (isMatchOriginal) {
-        console.log('⚠️ Password match found with non-trimmed version');
-        return true;
-      }
-    }
-    
-    return isMatch;
-  } catch (error) {
-    console.error('❌ Error comparing password:', error);
-    console.error('Error details:', {
-      message: error.message,
-      stack: error.stack
-    });
-    return false;
-  }
+  return match;
 };
 
 const Profile = mongoose.model('Profile', profileSchema);
@@ -520,42 +483,19 @@ app.post('/api/profiles/reset-password', async (req, res) => {
       return res.status(400).json({ error: 'Invalid or expired reset token' });
     }
 
-    // Update password - hash it directly to ensure it's saved correctly
-    const saltRounds = 10;
+    // Update password - store as plain text (NO HASHING)
     const trimmedNewPassword = newPassword.trim();
-    const newHashedPassword = await bcrypt.hash(trimmedNewPassword, saltRounds);
     
-    // Verify the hash works BEFORE saving
-    const testCompare = await bcrypt.compare(trimmedNewPassword, newHashedPassword);
-    if (!testCompare) {
-      console.error('❌ CRITICAL: Hash verification failed before saving!');
-      return res.status(500).json({ error: 'Password hashing failed' });
-    }
-    console.log('✅ Hash verification passed before saving');
-    
-    profile.password = newHashedPassword;
+    profile.password = trimmedNewPassword;
     profile.resetToken = undefined;
     profile.resetTokenExpiry = undefined;
     await profile.save();
 
-    // Verify the password was saved correctly and can be compared
-    const verifyProfile = await Profile.findById(profile._id);
-    const passwordIsHashed = verifyProfile.password && verifyProfile.password.startsWith('$2b$');
-    
-    // Test that we can compare the saved password
-    const verifyCompare = await bcrypt.compare(trimmedNewPassword, verifyProfile.password);
     console.log('✅ Password reset successful for:', profile.username);
-    console.log('🔍 Password verification:', {
+    console.log('🔍 Password saved (plain text):', {
       username: profile.username,
-      passwordIsHashed: passwordIsHashed,
-      passwordLength: verifyProfile.password ? verifyProfile.password.length : 0,
-      hashMatches: verifyCompare,
-      passwordPrefix: verifyProfile.password ? verifyProfile.password.substring(0, 20) : 'none'
+      passwordLength: trimmedNewPassword.length
     });
-    
-    if (!verifyCompare) {
-      console.error('❌ CRITICAL: Saved password hash does not match!');
-    }
 
     res.status(200).json({ 
       message: 'Password has been reset successfully. You can now login with your new password.' 
@@ -975,14 +915,8 @@ app.post('/api/debug/test-password/:username', async (req, res) => {
       return res.status(404).json({ error: 'User not found' });
     }
     
-    const isHashed = profile.password && (profile.password.startsWith('$2b$') || profile.password.startsWith('$2a$'));
-    
-    let matchResult = false;
-    if (isHashed) {
-      matchResult = await bcrypt.compare(testPassword.trim(), profile.password);
-    } else {
-      matchResult = profile.password === testPassword.trim();
-    }
+    // Plain text comparison (no hashing)
+    const matchResult = profile.password.trim() === testPassword.trim();
     
     res.json({
       username: profile.username,
