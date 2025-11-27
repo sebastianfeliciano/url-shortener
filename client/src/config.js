@@ -1,12 +1,12 @@
 // Get the server's base URL dynamically
 function getServerBaseUrl() {
-  // In production, use the same origin (deployed URL) - Vercel will handle this
+  // In production, check for REACT_APP_API_URL first (for Render backend)
   if (process.env.NODE_ENV === 'production') {
-    // If REACT_APP_API_URL is set, use it
+    // If REACT_APP_API_URL is set, use it (points to Render backend)
     if (process.env.REACT_APP_API_URL) {
       return process.env.REACT_APP_API_URL;
     }
-    // Otherwise, use the same origin as the frontend (works for Vercel)
+    // Otherwise, use the same origin as the frontend (for full-stack on same domain)
     if (typeof window !== 'undefined') {
       return window.location.origin;
     }
