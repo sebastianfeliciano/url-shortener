@@ -570,16 +570,25 @@ if (process.env.NODE_ENV === 'production') {
 
 // Start the server (only if not in serverless environment like Vercel)
 // Vercel will handle the serverless function, so we don't need to listen
-if (process.env.VERCEL !== '1' && !process.env.RAILWAY_ENVIRONMENT && !process.env.RENDER) {
-  app.listen(PORT, () => {
-    console.log(`Server running on port ${PORT}`);
+// Render and Railway need the server to listen
+const isServerless = process.env.VERCEL === '1';
+const isRender = !!process.env.RENDER_EXTERNAL_URL;
+const isRailway = !!process.env.RAILWAY_ENVIRONMENT;
+
+if (!isServerless) {
+  // Render sets PORT automatically, but we can use process.env.PORT
+  const serverPort = process.env.PORT || PORT;
+  
+  app.listen(serverPort, '0.0.0.0', () => {
+    console.log(`Server running on port ${serverPort}`);
     console.log(`Environment: ${process.env.NODE_ENV || 'development'}`);
+    console.log(`Platform: ${isRender ? 'Render' : isRailway ? 'Railway' : 'Local'}`);
     console.log(`MongoDB URI: ${MONGODB_URI.replace(/:[^:@]+@/, ':****@')}`);
     console.log(`Base URL: ${BASE_URL}`);
   }).on('error', (err) => {
     if (err.code === 'EADDRINUSE') {
-      console.error(`❌ Port ${PORT} is already in use. Please kill the process using this port.`);
-      console.error(`   Run: lsof -ti:${PORT} | xargs kill -9`);
+      console.error(`❌ Port ${serverPort} is already in use. Please kill the process using this port.`);
+      console.error(`   Run: lsof -ti:${serverPort} | xargs kill -9`);
       process.exit(1);
     } else {
       console.error('Server error:', err);
@@ -587,8 +596,8 @@ if (process.env.VERCEL !== '1' && !process.env.RAILWAY_ENVIRONMENT && !process.e
     }
   });
 } else {
-  // Serverless environment - just log
-  console.log('Serverless environment detected');
+  // Serverless environment (Vercel) - just log
+  console.log('Serverless environment detected (Vercel)');
   console.log(`Base URL: ${BASE_URL}`);
   console.log(`MongoDB URI: ${MONGODB_URI.replace(/:[^:@]+@/, ':****@')}`);
 }
