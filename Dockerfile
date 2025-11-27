@@ -42,11 +42,9 @@ COPY --from=builder /app/api ./api
 COPY --from=builder /app/src ./src
 COPY --from=builder /app/client/build ./client/build
 
-# Create non-root user
-RUN addgroup -g 1001 -S nodejs && \
-    adduser -S nodejs -u 1001 && \
-    chown -R nodejs:nodejs /app
-USER nodejs
+# Use the existing node user (already exists in node:18-alpine)
+RUN chown -R node:node /app
+USER node
 
 # Expose port (Render sets PORT via environment variable)
 EXPOSE ${PORT:-5000}
