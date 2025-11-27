@@ -18,6 +18,19 @@ services:
       - monitoring
     restart: unless-stopped
 
+  blackbox:
+    image: prom/blackbox-exporter:latest
+    container_name: blackbox-exporter
+    ports:
+      - "9115:9115"
+    command:
+      - '--config.file=/etc/blackbox_exporter/config.yml'
+    volumes:
+      - ./blackbox/config.yml:/etc/blackbox_exporter/config.yml:ro
+    networks:
+      - monitoring
+    restart: unless-stopped
+
   grafana:
     image: grafana/grafana:latest
     container_name: grafana
@@ -35,6 +48,7 @@ services:
       - monitoring
     depends_on:
       - prometheus
+      - blackbox
     restart: unless-stopped
 
 volumes:
