@@ -10,6 +10,7 @@ const bcrypt = require('bcryptjs');
 const nodemailer = require('nodemailer');
 const sgMail = require('@sendgrid/mail');
 const path = require('path');
+const { metricsMiddleware, updateDbStatus, getMetrics, register } = require('./middleware/metrics');
 require('dotenv').config();
 
 const app = express();
@@ -141,6 +142,7 @@ const Profile = mongoose.model('Profile', profileSchema);
 
 // Ensure Profile collection exists
 mongoose.connection.once('open', async () => {
+  updateDbStatus(mongoose); // Update metrics
   try {
     const collections = await mongoose.connection.db.listCollections().toArray();
     const collectionNames = collections.map(c => c.name);
@@ -153,6 +155,15 @@ mongoose.connection.once('open', async () => {
   } catch (error) {
     console.error('Error checking collections:', error);
   }
+});
+
+// Update DB status on connection/disconnection
+mongoose.connection.on('connected', () => {
+  updateDbStatus(mongoose);
+});
+
+mongoose.connection.on('disconnected', () => {
+  updateDbStatus(mongoose);
 });
 
 // URL Schema
