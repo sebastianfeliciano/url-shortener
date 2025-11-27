@@ -564,11 +564,16 @@ if (process.env.NODE_ENV === 'production') {
   
   // Catch-all handler: send back React's index.html file for any non-API routes
   // This must come AFTER all API routes
-  app.get('*', (req, res, next) => {
-    // Skip API routes and short URL redirects (8-char codes)
-    if (req.path.startsWith('/api/') || /^\/[a-zA-Z0-9_-]{8}$/.test(req.path)) {
-      return next();
+  app.get('*', (req, res) => {
+    // Skip API routes - let them 404 if not found
+    if (req.path.startsWith('/api/')) {
+      return res.status(404).json({ error: 'API endpoint not found' });
     }
+    // Skip short URL redirects (8-char codes) - they're handled by the redirect route
+    if (/^\/[a-zA-Z0-9_-]{8}$/.test(req.path)) {
+      return res.status(404).json({ error: 'Short URL not found' });
+    }
+    // For all other routes, serve the React app
     res.sendFile(path.join(__dirname, 'client/build', 'index.html'));
   });
 }
