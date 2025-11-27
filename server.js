@@ -61,6 +61,9 @@ app.use(helmet());
 app.use(cors());
 app.use(express.json());
 
+// Prometheus metrics middleware (must be before routes)
+app.use(metricsMiddleware);
+
 // Rate limiting
 const limiter = rateLimit({
   windowMs: 15 * 60 * 1000, // 15 minutes
