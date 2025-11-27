@@ -963,12 +963,21 @@ if (!isServerless) {
   // Render sets PORT automatically, but we can use process.env.PORT
   const serverPort = process.env.PORT || PORT;
   
+  // Start server immediately, don't wait for MongoDB
   app.listen(serverPort, '0.0.0.0', () => {
-    console.log(`Server running on port ${serverPort}`);
+    console.log(`✅ Server running on port ${serverPort}`);
     console.log(`Environment: ${process.env.NODE_ENV || 'development'}`);
     console.log(`Platform: ${isRender ? 'Render' : isRailway ? 'Railway' : 'Local'}`);
     console.log(`MongoDB URI: ${MONGODB_URI.replace(/:[^:@]+@/, ':****@')}`);
     console.log(`Base URL: ${BASE_URL}`);
+    console.log(`MongoDB connection state: ${mongoose.connection.readyState} (0=disconnected, 1=connected)`);
+    
+    // Log MongoDB connection status
+    if (mongoose.connection.readyState === 1) {
+      console.log('✅ MongoDB already connected');
+    } else {
+      console.log('⏳ MongoDB connecting in background...');
+    }
   }).on('error', (err) => {
     if (err.code === 'EADDRINUSE') {
       console.error(`❌ Port ${serverPort} is already in use. Please kill the process using this port.`);
