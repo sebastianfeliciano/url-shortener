@@ -470,8 +470,9 @@ app.post('/api/profiles/reset-password', async (req, res) => {
       return res.status(400).json({ error: 'Invalid or expired reset token' });
     }
 
-    // Update password
+    // Update password - mark as modified to trigger pre-save hook for hashing
     profile.password = newPassword;
+    profile.markModified('password'); // Ensure password is marked as modified
     profile.resetToken = undefined;
     profile.resetTokenExpiry = undefined;
     await profile.save();
