@@ -466,7 +466,7 @@ const Profile = ({ onLoginStateChange }) => {
                   marginTop: '15px',
                   background: 'none',
                   border: 'none',
-                  color: '#6f42c1',
+                  color: 'white',
                   cursor: 'pointer',
                   textDecoration: 'underline',
                   fontSize: '14px'
