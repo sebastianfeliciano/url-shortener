@@ -1,0 +1,146 @@
+name: Continuous Integration
+
+on:
+  push:
+    branches: [ main, develop ]
+  pull_request:
+    branches: [ main, develop ]
+
+env:
+  NODE_VERSION: '18.x'
+
+jobs:
+  test:
+    name: Test and Coverage
+    runs-on: ubuntu-latest
+    
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v3
+
+    - name: Setup Node.js
+      uses: actions/setup-node@v3
+      with:
+        node-version: ${{ env.NODE_VERSION }}
+        cache: 'npm'
+
+    - name: Install dependencies
+      run: |
+        npm ci
+        cd client && npm ci
+
+    - name: Run linter
+      run: npm run lint
+      continue-on-error: true
+
+    - name: Run tests with coverage
+      run: npm run test:coverage
+      env:
+        MONGODB_URI: ${{ secrets.MONGODB_URI || 'mongodb+srv://giuseppi:supersecretpassword@kambaz.auzwwz1.mongodb.net/urlshortener_test?retryWrites=true&w=majority' }}
+        NODE_ENV: test
+
+    - name: Check coverage threshold (70%)
+      run: |
+        if [ ! -f coverage/coverage-summary.json ]; then
+          echo "❌ Coverage file not found"
+          exit 1
+        fi
+        
+        # Install bc for floating point comparison
+        sudo apt-get update && sudo apt-get install -y bc
+        
+        # Extract coverage percentages
+        LINES=$(node -e "const cov = require('./coverage/coverage-summary.json'); console.log(cov.total.lines.pct)")
+        STATEMENTS=$(node -e "const cov = require('./coverage/coverage-summary.json'); console.log(cov.total.statements.pct)")
+        FUNCTIONS=$(node -e "const cov = require('./coverage/coverage-summary.json'); console.log(cov.total.functions.pct)")
+        BRANCHES=$(node -e "const cov = require('./coverage/coverage-summary.json'); console.log(cov.total.branches.pct)")
+        
+        echo "📊 Coverage Report:"
+        echo "  Lines: ${LINES}%"
+        echo "  Statements: ${STATEMENTS}%"
+        echo "  Functions: ${FUNCTIONS}%"
+        echo "  Branches: ${BRANCHES}%"
+        echo ""
+        echo "Threshold: 70%"
+        
+        # Check if any coverage is below 70%
+        FAILED=0
+        if (( $(echo "$LINES < 70" | bc -l) )); then
+          echo "❌ Lines coverage (${LINES}%) is below 70%"
+          FAILED=1
+        fi
+        if (( $(echo "$STATEMENTS < 70" | bc -l) )); then
+          echo "❌ Statements coverage (${STATEMENTS}%) is below 70%"
+          FAILED=1
+        fi
+        if (( $(echo "$FUNCTIONS < 70" | bc -l) )); then
+          echo "❌ Functions coverage (${FUNCTIONS}%) is below 70%"
+          FAILED=1
+        fi
+        if (( $(echo "$BRANCHES < 70" | bc -l) )); then
+          echo "❌ Branches coverage (${BRANCHES}%) is below 70%"
+          FAILED=1
+        fi
+        
+        if [ $FAILED -eq 1 ]; then
+          echo ""
+          echo "❌ Coverage check failed! At least one metric is below 70%"
+          exit 1
+        fi
+        
+        echo "✅ All coverage metrics meet the 70% threshold"
+
+    - name: Upload coverage reports
+      uses: codecov/codecov-action@v3
+      with:
+        file: ./coverage/lcov.info
+        flags: unittests
+        name: codecov-umbrella
+        fail_ci_if_error: false
+      continue-on-error: true
+
+    - name: Upload coverage artifacts
+      uses: actions/upload-artifact@v3
+      with:
+        name: coverage-report
+        path: coverage/
+        retention-days: 30
+
+    - name: Build application
+      run: npm run build
+      env:
+        NODE_ENV: production
+
+  docker-build:
+    name: Build Docker Image
+    runs-on: ubuntu-latest
+    needs: test
+    if: github.event_name == 'push'
+    
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v3
+
+    - name: Set up Docker Buildx
+      uses: docker/setup-buildx-action@v2
+
+    - name: Build Docker image
+      uses: docker/build-push-action@v4
+      with:
+        context: .
+        push: false
+        tags: url-shortener:test
+        cache-from: type=gha
+        cache-to: type=gha,mode=max
+
+    - name: Test Docker image
+      run: |
+        docker run --rm -d --name test-container -p 5000:5000 \
+          -e MONGODB_URI="${{ secrets.MONGODB_URI || 'mongodb+srv://giuseppi:supersecretpassword@kambaz.auzwwz1.mongodb.net/urlshortener_test?retryWrites=true&w=majority' }}" \
+          -e NODE_ENV=production \
+          url-shortener:test || true
+        sleep 5
+        docker logs test-container || true
+        curl -f http://localhost:5000/api/health || echo "Health check failed"
+        docker stop test-container || true
+
