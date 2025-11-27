@@ -477,7 +477,15 @@ app.post('/api/profiles/reset-password', async (req, res) => {
     profile.resetTokenExpiry = undefined;
     await profile.save();
 
+    // Verify the password was saved correctly
+    const verifyProfile = await Profile.findById(profile._id);
+    const passwordIsHashed = verifyProfile.password && verifyProfile.password.startsWith('$2b$');
     console.log('✅ Password reset successful for:', profile.username);
+    console.log('🔍 Password verification:', {
+      username: profile.username,
+      passwordIsHashed: passwordIsHashed,
+      passwordLength: verifyProfile.password ? verifyProfile.password.length : 0
+    });
 
     res.status(200).json({ 
       message: 'Password has been reset successfully. You can now login with your new password.' 
@@ -506,17 +514,29 @@ app.post('/api/profiles/login', async (req, res) => {
 
     const profile = await Profile.findOne({ username });
     if (!profile) {
+      console.log('❌ Login failed: User not found:', username);
       return res.status(401).json({ error: 'Invalid credentials' });
     }
+
+    // Debug: Check if password is hashed (should start with $2b$)
+    const isHashed = profile.password && profile.password.startsWith('$2b$');
+    console.log('🔍 Login attempt:', {
+      username: profile.username,
+      passwordIsHashed: isHashed,
+      passwordLength: profile.password ? profile.password.length : 0
+    });
 
     const isMatch = await profile.comparePassword(password);
     if (!isMatch) {
+      console.log('❌ Login failed: Password mismatch for user:', username);
       return res.status(401).json({ error: 'Invalid credentials' });
     }
 
+    console.log('✅ Login successful for:', username);
     res.json({
       id: profile._id,
       username: profile.username,
+      email: profile.email,
       createdAt: profile.createdAt
     });
   } catch (error) {
