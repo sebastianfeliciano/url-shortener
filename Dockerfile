@@ -48,9 +48,10 @@ USER node
 # Expose port (Render sets PORT via environment variable)
 EXPOSE ${PORT:-5000}
 
-# Health check (uses PORT from environment, curl is more reliable)
-HEALTHCHECK --interval=30s --timeout=3s --start-period=5s --retries=3 \
-  CMD curl -f http://localhost:${PORT:-5000}/api/health || exit 1
+# Health check - Render uses PORT env var (usually 10000)
+# Increased start-period to allow MongoDB connection and server startup
+HEALTHCHECK --interval=30s --timeout=10s --start-period=90s --retries=5 \
+  CMD sh -c 'PORT=${PORT:-10000} && wget --no-verbose --tries=1 --spider http://localhost:$PORT/api/health || exit 1'
 
 # Use dumb-init to handle signals properly
 ENTRYPOINT ["dumb-init", "--"]

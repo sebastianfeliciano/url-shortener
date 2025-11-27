@@ -840,9 +840,17 @@ app.get('/api/urls', async (req, res) => {
   }
 });
 
-// Health check endpoint
+// Health check endpoint - should respond even if MongoDB is not connected
 app.get('/api/health', (req, res) => {
-  res.json({ status: 'OK', timestamp: new Date().toISOString() });
+  const dbStatus = mongoose.connection.readyState;
+  const dbStatusText = dbStatus === 1 ? 'connected' : dbStatus === 2 ? 'connecting' : 'disconnected';
+  
+  res.json({ 
+    status: 'OK', 
+    timestamp: new Date().toISOString(),
+    database: dbStatusText,
+    databaseReady: dbStatus === 1
+  });
 });
 
 // GET /api/debug/user/:username - Debug endpoint to check user password status
