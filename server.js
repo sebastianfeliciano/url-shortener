@@ -314,7 +314,9 @@ const sendEmail = async (options) => {
   
   // Fall back to SMTP (nodemailer)
   try {
-    await emailTransporter.verify();
+    if (typeof emailTransporter.verify === 'function') {
+      await emailTransporter.verify();
+    }
     const result = await emailTransporter.sendMail(options);
     console.log('✅ Email sent via SMTP to:', options.to);
     return result;

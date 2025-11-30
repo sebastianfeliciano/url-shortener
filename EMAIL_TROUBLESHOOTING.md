@@ -87,7 +87,9 @@ Add this test endpoint to verify email setup:
 // Test email endpoint (add to server.js)
 app.get('/api/test-email', async (req, res) => {
   try {
-    await emailTransporter.verify();
+    if (typeof emailTransporter.verify === 'function') {
+      await emailTransporter.verify();
+    }
     res.json({ message: 'Email server connection successful' });
   } catch (error) {
     res.status(500).json({ 
