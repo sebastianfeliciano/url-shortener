@@ -22,38 +22,38 @@ jest.mock('nodemailer', () => ({
 // Note: server.js will not connect to MongoDB in test mode (handled by setup.js)
 // We'll require it after setup.js connects mongoose in beforeAll
 let app;
-beforeAll(async () => {
-  // Wait for mongoose to be connected (setup.js handles this)
-  // Poll until connected
-  let retries = 50;
-  while (mongoose.connection.readyState !== 1 && retries > 0) {
-    await new Promise(resolve => setTimeout(resolve, 100));
-    retries--;
-  }
-  
-  if (mongoose.connection.readyState !== 1) {
-    throw new Error('MongoDB connection not ready after waiting');
-  }
-  
-  // Clear the require cache to get a fresh server instance
-  delete require.cache[require.resolve('../server')];
-  app = require('../server');
-});
-
-// Clean up between test suites
-beforeEach(async () => {
-  // Clear all collections before each test
-  try {
-    const collections = mongoose.connection.collections;
-    for (const key in collections) {
-      await collections[key].deleteMany({});
-    }
-  } catch (error) {
-    // Collections might not exist yet, ignore
-  }
-});
 
 describe('URL Shortener API', () => {
+  beforeAll(async () => {
+    // Wait for mongoose to be connected (setup.js handles this)
+    // Poll until connected
+    let retries = 50;
+    while (mongoose.connection.readyState !== 1 && retries > 0) {
+      await new Promise(resolve => setTimeout(resolve, 100));
+      retries--;
+    }
+    
+    if (mongoose.connection.readyState !== 1) {
+      throw new Error('MongoDB connection not ready after waiting');
+    }
+    
+    // Clear the require cache to get a fresh server instance
+    delete require.cache[require.resolve('../server')];
+    app = require('../server');
+  });
+
+  // Clean up between test suites
+  beforeEach(async () => {
+    // Clear all collections before each test
+    try {
+      const collections = mongoose.connection.collections;
+      for (const key in collections) {
+        await collections[key].deleteMany({});
+      }
+    } catch (error) {
+      // Collections might not exist yet, ignore
+    }
+  });
   describe('GET /api/health', () => {
     it('should return health status', async () => {
       const response = await request(app)
