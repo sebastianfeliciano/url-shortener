@@ -128,26 +128,51 @@ jobs:
     - name: Checkout code
       uses: actions/checkout@v4
 
-    - name: Set up Docker Buildx
-      uses: docker/setup-buildx-action@v2
-
     - name: Build Docker image
-      uses: docker/build-push-action@v4
-      with:
-        context: .
-        push: false
-        tags: url-shortener:test
-        cache-from: type=gha
-        cache-to: type=gha,mode=max
+      run: |
+        docker build -t url-shortener:test .
+        docker images | grep url-shortener
 
     - name: Test Docker image
       run: |
+        # Verify image exists
+        if ! docker image inspect url-shortener:test > /dev/null 2>&1; then
+          echo "❌ Docker image url-shortener:test not found"
+          docker images
+          exit 1
+        fi
+        
+        # Run container
         docker run --rm -d --name test-container -p 5000:5000 \
-          -e MONGODB_URI="${{ secrets.MONGODB_URI || 'mongodb+srv://giuseppi:supersecretpassword@kambaz.auzwwz1.mongodb.net/urlshortener_test?retryWrites=true&w=majority' }}" \
+          -e MONGODB_URI="${{ secrets.MONGODB_URI }}" \
           -e NODE_ENV=production \
-          url-shortener:test || true
+          url-shortener:test
+        
+        # Wait for container to start
         sleep 5
+        
+        # Check if container is running
+        if ! docker ps | grep -q test-container; then
+          echo "❌ Container failed to start"
+          docker logs test-container || true
+          exit 1
+        fi
+        
+        # Show container logs
+        echo "📋 Container logs:"
         docker logs test-container || true
-        curl -f http://localhost:5000/api/health || echo "Health check failed"
+        
+        # Health check with retries
+        echo "🏥 Running health check..."
+        for i in {1..5}; do
+          if curl -f http://localhost:5000/api/health; then
+            echo "✅ Health check passed"
+            break
+          fi
+          echo "⏳ Health check attempt $i/5 failed, retrying..."
+          sleep 2
+        done
+        
+        # Cleanup
         docker stop test-container || true
 
