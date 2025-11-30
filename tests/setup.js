@@ -1,10 +1,10 @@
 // Test setup file
-const { MongoMemoryServer } = require('mongodb-memory-server');
-const mongoose = require('mongoose');
-
-// Set test environment
+// Set test environment first
 process.env.NODE_ENV = 'test';
 process.env.PORT = '5000';
+
+const { MongoMemoryServer } = require('mongodb-memory-server');
+const mongoose = require('mongoose');
 
 // Global variables for MongoDB Memory Server
 let mongoServer;

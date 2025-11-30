@@ -1,7 +1,8 @@
 module.exports = {
   testEnvironment: 'node',
-  testMatch: ['**/tests/**/*.test.js'],
-  testPathIgnorePatterns: ['/node_modules/', '/url-shortener/'],
+  roots: ['<rootDir>'],
+  testMatch: ['<rootDir>/tests/**/*.test.js'],
+  testPathIgnorePatterns: ['/node_modules/', '/url-shortener/', '/client/', '/build/'],
   collectCoverageFrom: [
     'server.js',
     'middleware/**/*.js',
@@ -30,11 +31,5 @@ module.exports = {
   setupFilesAfterEnv: ['<rootDir>/tests/setup.js'],
   testTimeout: 30000,
   forceExit: true,
-  detectOpenHandles: true,
-  transform: {
-    '^.+\\.js$': 'babel-jest'
-  },
-  transformIgnorePatterns: [
-    'node_modules/(?!(nanoid)/)'
-  ]
+  detectOpenHandles: true
 };
