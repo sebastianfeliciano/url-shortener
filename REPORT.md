@@ -142,7 +142,7 @@ Implemented Prometheus metrics middleware:
 
 - `/metrics` endpoint exposes Prometheus-formatted metrics
 - Ready for scraping by Prometheus server
-- Can be visualized in Grafana dashboards
+- Can be queried directly in Prometheus
 
 ## 6. Branch Structure
 
@@ -194,7 +194,6 @@ docker run -p 5000:5000 url-shortener
 ## 10. Next Steps
 
 - Deploy to cloud platform (Vercel, AWS, etc.)
-- Set up Grafana dashboard for metrics visualization
 - Add more comprehensive error logging
 - Implement rate limiting per user
 - Add API authentication tokens
