@@ -1,22 +1,26 @@
 module.exports = {
   testEnvironment: 'node',
   roots: ['<rootDir>'],
-  testMatch: ['<rootDir>/tests/**/*.test.js'],
-  testPathIgnorePatterns: ['/node_modules/', '/url-shortener/', '/client/', '/build/'],
+  testMatch: ['**/tests/**/*.test.js'],
+  testPathIgnorePatterns: [
+    '/node_modules/',
+    '/client/',
+    '/build/',
+    'node_modules/.*\\.test\\.js$'
+  ],
   collectCoverageFrom: [
     'server.js',
     'middleware/**/*.js',
     '!node_modules/**',
     '!client/**',
     '!tests/**',
-    '!url-shortener/**',
     '!api/**'
   ],
   coveragePathIgnorePatterns: [
     '/node_modules/',
     '/client/',
     '/tests/',
-    '/url-shortener/'
+    '/build/'
   ],
   coverageDirectory: 'coverage',
   coverageReporters: ['text', 'lcov', 'html', 'json-summary'],
