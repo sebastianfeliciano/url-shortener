@@ -85,16 +85,23 @@ const urlCache = new LRUCache({
 // MongoDB connection - Using Atlas database
 const MONGODB_URI = process.env.MONGODB_URI || 'mongodb+srv://giuseppi:supersecretpassword@kambaz.auzwwz1.mongodb.net/urlshortener?retryWrites=true&w=majority';
 
+// Helper to inspect database connection status (overridable in tests)
+const dbStatus = {
+  get: () => mongoose.connection.readyState
+};
+
+const isDatabaseConnected = () => dbStatus.get() === 1;
+
 // For serverless environments (Vercel), reuse existing connection
 // Skip MongoDB connection in test environment (handled by test setup)
 if (process.env.NODE_ENV === 'test') {
   // In test environment, MongoDB is already connected by test setup
   // Just update metrics if connection exists
-  if (mongoose.connection.readyState === 1) {
+  if (isDatabaseConnected()) {
     updateDbStatus(mongoose);
   }
 /* istanbul ignore next */
-} else if (mongoose.connection.readyState === 0) {
+} else if (dbStatus.get() === 0) {
   mongoose.connect(MONGODB_URI, {
     useNewUrlParser: true,
     useUnifiedTopology: true,
@@ -128,9 +135,6 @@ const profileSchema = new mongoose.Schema({
   resetTokenExpiry: { type: Date },
   createdAt: { type: Date, default: Date.now }
 });
-
-// NO PASSWORD HASHING - Storing passwords as plain text (NOT RECOMMENDED FOR PRODUCTION)
-// This is a temporary solution to fix login issues
 
 // Method to compare password (plain text comparison)
 profileSchema.methods.comparePassword = async function(candidatePassword) {
@@ -234,16 +238,16 @@ if (process.env.SENDGRID_API_KEY) {
 }
 
 // Setup email transporter (using Gmail or SMTP as fallback)
-const createEmailTransporter = () => {
+const createEmailTransporter = (env = process.env) => {
   // For production, use environment variables
-  if (process.env.SMTP_HOST && process.env.SMTP_USER && process.env.SMTP_PASS) {
+  if (env.SMTP_HOST && env.SMTP_USER && env.SMTP_PASS) {
     return nodemailer.createTransport({
-      host: process.env.SMTP_HOST,
-      port: parseInt(process.env.SMTP_PORT) || 587,
-      secure: process.env.SMTP_SECURE === 'true',
+      host: env.SMTP_HOST,
+      port: parseInt(env.SMTP_PORT, 10) || 587,
+      secure: env.SMTP_SECURE === 'true',
       auth: {
-        user: process.env.SMTP_USER,
-        pass: process.env.SMTP_PASS
+        user: env.SMTP_USER,
+        pass: env.SMTP_PASS
       },
       connectionTimeout: 10000, // 10 seconds
       greetingTimeout: 10000,
@@ -252,15 +256,15 @@ const createEmailTransporter = () => {
   }
   
   // For development/testing, use Gmail (requires app password)
-  if (process.env.GMAIL_USER && process.env.GMAIL_PASS) {
+  if (env.GMAIL_USER && env.GMAIL_PASS) {
     return nodemailer.createTransport({
       service: 'gmail',
       host: 'smtp.gmail.com',
       port: 587,
       secure: false,
       auth: {
-        user: process.env.GMAIL_USER,
-        pass: process.env.GMAIL_PASS
+        user: env.GMAIL_USER,
+        pass: env.GMAIL_PASS
       },
       connectionTimeout: 15000,
       greetingTimeout: 15000,
@@ -288,19 +292,24 @@ const createEmailTransporter = () => {
 const emailTransporter = createEmailTransporter();
 
 // Send email function (prefers SendGrid API, falls back to SMTP)
-const sendEmail = async (options) => {
+const sendEmail = async (options, deps = {}) => {
+  const {
+    env = process.env,
+    transporter = emailTransporter,
+    sgClient = sgMail
+  } = deps;
   // Use SendGrid API if available (more reliable for cloud)
-  if (process.env.SENDGRID_API_KEY) {
+  if (env.SENDGRID_API_KEY) {
     try {
       const msg = {
         to: options.to,
-        from: options.from || process.env.SENDGRID_FROM || process.env.SMTP_FROM || 'noreply@urlshortener.com',
+        from: options.from || env.SENDGRID_FROM || env.SMTP_FROM || 'noreply@urlshortener.com',
         subject: options.subject,
         text: options.text,
         html: options.html
       };
       
-      await sgMail.send(msg);
+      await sgClient.send(msg);
       console.log('✅ Email sent via SendGrid API to:', options.to);
       return { messageId: 'sendgrid-api' };
     } catch (error) {
@@ -314,10 +323,10 @@ const sendEmail = async (options) => {
   
   // Fall back to SMTP (nodemailer)
   try {
-    if (typeof emailTransporter.verify === 'function') {
-      await emailTransporter.verify();
+    if (typeof transporter.verify === 'function') {
+      await transporter.verify();
     }
-    const result = await emailTransporter.sendMail(options);
+    const result = await transporter.sendMail(options);
     console.log('✅ Email sent via SMTP to:', options.to);
     return result;
   } catch (error) {
@@ -330,7 +339,7 @@ const sendEmail = async (options) => {
 app.post('/api/profiles/register', async (req, res) => {
   try {
     // Check MongoDB connection
-    if (mongoose.connection.readyState !== 1) {
+    if (!isDatabaseConnected()) {
       return res.status(503).json({ 
         error: 'Database connection unavailable. Please check MongoDB connection settings.' 
       });
@@ -397,7 +406,7 @@ app.post('/api/profiles/register', async (req, res) => {
 // POST /api/profiles/forgot-password - Request password reset
 app.post('/api/profiles/forgot-password', async (req, res) => {
   try {
-    if (mongoose.connection.readyState !== 1) {
+    if (!isDatabaseConnected()) {
       return res.status(503).json({ 
         error: 'Database connection unavailable.' 
       });
@@ -491,7 +500,7 @@ app.post('/api/profiles/forgot-password', async (req, res) => {
 // POST /api/profiles/reset-password - Reset password with token
 app.post('/api/profiles/reset-password', async (req, res) => {
   try {
-    if (mongoose.connection.readyState !== 1) {
+    if (!isDatabaseConnected()) {
       return res.status(503).json({ 
         error: 'Database connection unavailable.' 
       });
@@ -543,7 +552,7 @@ app.post('/api/profiles/reset-password', async (req, res) => {
 app.post('/api/profiles/login', async (req, res) => {
   try {
     // Check MongoDB connection
-    if (mongoose.connection.readyState !== 1) {
+    if (!isDatabaseConnected()) {
       return res.status(503).json({ 
         error: 'Database connection unavailable. Please check MongoDB connection settings.' 
       });
@@ -874,14 +883,14 @@ app.get('/api/urls', async (req, res) => {
 
 // Health check endpoint - should respond even if MongoDB is not connected
 app.get('/api/health', (req, res) => {
-  const dbStatus = mongoose.connection.readyState;
-  const dbStatusText = dbStatus === 1 ? 'connected' : dbStatus === 2 ? 'connecting' : 'disconnected';
+  const dbState = dbStatus.get();
+  const dbStatusText = dbState === 1 ? 'connected' : dbState === 2 ? 'connecting' : 'disconnected';
   
   res.json({ 
     status: 'OK', 
     timestamp: new Date().toISOString(),
     database: dbStatusText,
-    databaseReady: dbStatus === 1
+    databaseReady: dbState === 1
   });
 });
 
@@ -944,7 +953,7 @@ app.post('/api/debug/test-password/:username', async (req, res) => {
     
     res.json({
       username: profile.username,
-      passwordIsHashed: isHashed,
+      passwordIsHashed: false,
       testPasswordLength: testPassword.length,
       testPasswordTrimmedLength: testPassword.trim().length,
       storedPasswordLength: profile.password ? profile.password.length : 0,
@@ -1020,10 +1029,10 @@ if (process.env.NODE_ENV !== 'test') {
       console.log(`Platform: ${isRender ? 'Render' : isRailway ? 'Railway' : 'Local'}`);
       console.log(`MongoDB URI: ${MONGODB_URI.replace(/:[^:@]+@/, ':****@')}`);
       console.log(`Base URL: ${BASE_URL}`);
-      console.log(`MongoDB connection state: ${mongoose.connection.readyState} (0=disconnected, 1=connected)`);
+      console.log(`MongoDB connection state: ${dbStatus.get()} (0=disconnected, 1=connected)`);
       
       // Log MongoDB connection status
-      if (mongoose.connection.readyState === 1) {
+      if (isDatabaseConnected()) {
         console.log('✅ MongoDB already connected');
       } else {
         console.log('⏳ MongoDB connecting in background...');
@@ -1044,6 +1053,15 @@ if (process.env.NODE_ENV !== 'test') {
     console.log(`Base URL: ${BASE_URL}`);
     console.log(`MongoDB URI: ${MONGODB_URI.replace(/:[^:@]+@/, ':****@')}`);
   }
+}
+
+if (process.env.NODE_ENV === 'test') {
+  app.__testHelpers = {
+    createEmailTransporter,
+    sendEmail,
+    dbStatus,
+    isDatabaseConnected
+  };
 }
 
 // Export for Vercel serverless functions

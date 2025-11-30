@@ -22,6 +22,9 @@ jest.mock('nodemailer', () => ({
 // Note: server.js will not connect to MongoDB in test mode (handled by setup.js)
 // We'll require it after setup.js connects mongoose in beforeAll
 let app;
+let helpers;
+const sgMail = require('@sendgrid/mail');
+const nodemailer = require('nodemailer');
 
 describe('URL Shortener API', () => {
   beforeAll(async () => {
@@ -40,6 +43,7 @@ describe('URL Shortener API', () => {
     // Clear the require cache to get a fresh server instance
     delete require.cache[require.resolve('../server')];
     app = require('../server');
+    helpers = app.__testHelpers || {};
   });
 
   // Clean up between test suites
@@ -1341,6 +1345,400 @@ describe('URL Shortener API', () => {
 
       expect(Array.isArray(response.body)).toBe(true);
       expect(response.body.length).toBe(0);
+    });
+  });
+
+  describe('Database guard rails', () => {
+    let readySpy;
+    const getDbStatusHelper = () => {
+      if (!helpers || !helpers.dbStatus || typeof helpers.dbStatus.get !== 'function') {
+        throw new Error('dbStatus helper not available');
+      }
+      return helpers.dbStatus;
+    };
+
+    const mockDbState = (value) => {
+      readySpy = jest.spyOn(getDbStatusHelper(), 'get').mockReturnValue(value);
+    };
+
+    afterEach(() => {
+      if (readySpy) {
+        readySpy.mockRestore();
+        readySpy = undefined;
+      }
+    });
+
+    it('should block registration when database is unavailable', async () => {
+      mockDbState(0);
+      await request(app)
+        .post('/api/profiles/register')
+        .send({
+          username: 'dbguard-register',
+          email: 'dbguard-register@example.com',
+          password: 'TestPassword123!'
+        })
+        .expect(503);
+    });
+
+    it('should block forgot-password when database is unavailable', async () => {
+      mockDbState(0);
+      await request(app)
+        .post('/api/profiles/forgot-password')
+        .send({ email: 'anyone@example.com' })
+        .expect(503);
+    });
+
+    it('should block reset-password when database is unavailable', async () => {
+      mockDbState(0);
+      await request(app)
+        .post('/api/profiles/reset-password')
+        .send({
+          token: 'test-token',
+          newPassword: 'NewPassword123!'
+        })
+        .expect(503);
+    });
+
+    it('should block login when database is unavailable', async () => {
+      mockDbState(0);
+      await request(app)
+        .post('/api/profiles/login')
+        .send({
+          username: 'anyuser',
+          password: 'Password123!'
+        })
+        .expect(503);
+    });
+  });
+
+  describe('Debug user endpoint', () => {
+    it('should return debugging information for an existing user', async () => {
+      await request(app)
+        .post('/api/profiles/register')
+        .send({
+          username: 'debug-inspect',
+          email: 'debug-inspect@example.com',
+          password: 'DebugPassword123!'
+        });
+
+      const response = await request(app)
+        .get('/api/debug/user/debug-inspect')
+        .expect(200);
+
+      expect(response.body).toMatchObject({
+        username: 'debug-inspect',
+        email: 'debug-inspect@example.com',
+        passwordIsHashed: false
+      });
+      expect(response.body.passwordLength).toBeGreaterThan(0);
+      expect(response.body.passwordPrefix).toMatch(/^Debug/);
+    });
+
+    it('should fall back when password data is missing', async () => {
+      await request(app)
+        .post('/api/profiles/register')
+        .send({
+          username: 'debug-empty',
+          email: 'debug-empty@example.com',
+          password: 'SomePassword123!'
+        });
+
+      const Profile = mongoose.model('Profile');
+      const profile = await Profile.findOne({ username: 'debug-empty' });
+      profile.password = '';
+      await profile.save({ validateBeforeSave: false });
+
+      const response = await request(app)
+        .get('/api/debug/user/debug-empty')
+        .expect(200);
+
+      expect(response.body.passwordLength).toBe(0);
+      expect(response.body.passwordPrefix).toBe('none');
+    });
+
+    it('should return 404 for an unknown debug user', async () => {
+      await request(app)
+        .get('/api/debug/user/does-not-exist')
+        .expect(404);
+    });
+  });
+
+  describe('Debug password tester endpoint', () => {
+    it('should confirm password matches for existing user', async () => {
+      await request(app)
+        .post('/api/profiles/register')
+        .send({
+          username: 'debug-pass',
+          email: 'debug-pass@example.com',
+          password: 'DebugPass123!'
+        });
+
+      const response = await request(app)
+        .post('/api/debug/test-password/debug-pass')
+        .send({ testPassword: 'DebugPass123!' })
+        .expect(200);
+
+      expect(response.body).toMatchObject({
+        username: 'debug-pass',
+        passwordIsHashed: false,
+        passwordMatches: true
+      });
+      expect(response.body.testPasswordLength).toBe(13);
+    });
+
+    it('should require testPassword payload', async () => {
+      await request(app)
+        .post('/api/debug/test-password/any-user')
+        .send({})
+        .expect(400);
+    });
+
+    it('should report 404 when user does not exist', async () => {
+      await request(app)
+        .post('/api/debug/test-password/missing-user')
+        .send({ testPassword: 'DoesNotMatter123!' })
+        .expect(404);
+    });
+  });
+
+  describe('GET /api/health connection states', () => {
+    let readySpy;
+    const getDbStatusHelper = () => {
+      if (!helpers || !helpers.dbStatus || typeof helpers.dbStatus.get !== 'function') {
+        throw new Error('dbStatus helper not available');
+      }
+      return helpers.dbStatus;
+    };
+
+    const setReadyState = (value) => {
+      readySpy = jest.spyOn(getDbStatusHelper(), 'get').mockReturnValue(value);
+    };
+
+    afterEach(() => {
+      if (readySpy) {
+        readySpy.mockRestore();
+        readySpy = undefined;
+      }
+    });
+
+    it('should report connecting state', async () => {
+      setReadyState(2);
+      const response = await request(app)
+        .get('/api/health')
+        .expect(200);
+
+      expect(response.body).toMatchObject({
+        database: 'connecting',
+        databaseReady: false
+      });
+    });
+
+    it('should report disconnected state', async () => {
+      setReadyState(0);
+      const response = await request(app)
+        .get('/api/health')
+        .expect(200);
+
+      expect(response.body).toMatchObject({
+        database: 'disconnected',
+        databaseReady: false
+      });
+    });
+  });
+
+  describe('Email helper utilities', () => {
+    const getHelperFns = () => {
+      if (!helpers || !helpers.createEmailTransporter || !helpers.sendEmail) {
+        throw new Error('Expected test helpers to be defined');
+      }
+      return helpers;
+    };
+
+    beforeEach(() => {
+      nodemailer.createTransport.mockClear();
+      sgMail.send.mockClear();
+    });
+
+    it('should build an SMTP transporter when SMTP env is provided', () => {
+      const { createEmailTransporter } = getHelperFns();
+      const env = {
+        SMTP_HOST: 'smtp.example.com',
+        SMTP_USER: 'smtp-user',
+        SMTP_PASS: 'smtp-pass',
+        SMTP_PORT: '2525',
+        SMTP_SECURE: 'true'
+      };
+
+      createEmailTransporter(env);
+
+      expect(nodemailer.createTransport).toHaveBeenCalledWith({
+        host: 'smtp.example.com',
+        port: 2525,
+        secure: true,
+        auth: {
+          user: 'smtp-user',
+          pass: 'smtp-pass'
+        },
+        connectionTimeout: 10000,
+        greetingTimeout: 10000,
+        socketTimeout: 10000
+      });
+    });
+
+    it('should build a Gmail transporter when Gmail env is provided', () => {
+      const { createEmailTransporter } = getHelperFns();
+      const env = {
+        GMAIL_USER: 'gmail-user@example.com',
+        GMAIL_PASS: 'gmail-pass'
+      };
+
+      createEmailTransporter(env);
+
+      expect(nodemailer.createTransport).toHaveBeenCalledWith({
+        service: 'gmail',
+        host: 'smtp.gmail.com',
+        port: 587,
+        secure: false,
+        auth: {
+          user: 'gmail-user@example.com',
+          pass: 'gmail-pass'
+        },
+        connectionTimeout: 15000,
+        greetingTimeout: 15000,
+        socketTimeout: 15000,
+        tls: {
+          rejectUnauthorized: false
+        }
+      });
+    });
+
+    it('should return a logging transporter when no email env is provided', async () => {
+      const { createEmailTransporter } = getHelperFns();
+      const transporter = createEmailTransporter({});
+      const result = await transporter.sendMail({
+        to: 'dev@example.com',
+        subject: 'Test',
+        text: 'Body'
+      });
+
+      expect(result).toEqual({ messageId: 'dev-mode' });
+    });
+
+    it('should prefer SendGrid when API key is available and respect explicit from address', async () => {
+      const { sendEmail } = getHelperFns();
+      const sgClient = { send: jest.fn().mockResolvedValue([{ statusCode: 202 }]) };
+      const transporter = {
+        verify: jest.fn(),
+        sendMail: jest.fn()
+      };
+      const env = {
+        SENDGRID_API_KEY: 'key-123'
+      };
+
+      const options = {
+        to: 'user@example.com',
+        from: 'custom@example.com',
+        subject: 'Hello',
+        text: 'Body'
+      };
+
+      const result = await sendEmail(options, { env, sgClient, transporter });
+      expect(result).toEqual({ messageId: 'sendgrid-api' });
+      expect(sgClient.send).toHaveBeenCalledTimes(1);
+      expect(sgClient.send.mock.calls[0][0].from).toBe('custom@example.com');
+      expect(transporter.sendMail).not.toHaveBeenCalled();
+    });
+
+    it('should use configured SENDGRID_FROM when sender is omitted', async () => {
+      const { sendEmail } = getHelperFns();
+      const sgClient = { send: jest.fn().mockResolvedValue([{ statusCode: 202 }]) };
+      const env = {
+        SENDGRID_API_KEY: 'key-456',
+        SENDGRID_FROM: 'config@example.com'
+      };
+
+      await sendEmail(
+        {
+          to: 'user@example.com',
+          subject: 'Hi',
+          text: 'Body'
+        },
+        { env, sgClient }
+      );
+
+      expect(sgClient.send.mock.calls[0][0].from).toBe('config@example.com');
+    });
+
+    it('should fall back to SMTP_FROM and SMTP transporter when SendGrid fails', async () => {
+      const { sendEmail } = getHelperFns();
+      const error = new Error('SendGrid failure');
+      error.response = { body: { errors: [] } };
+      const sgClient = { send: jest.fn().mockRejectedValue(error) };
+      const transporter = {
+        verify: jest.fn().mockResolvedValue(true),
+        sendMail: jest.fn().mockResolvedValue({ messageId: 'smtp-id' })
+      };
+      const env = {
+        SENDGRID_API_KEY: 'key-789',
+        SMTP_FROM: 'smtp@example.com'
+      };
+
+      const result = await sendEmail(
+        {
+          to: 'user@example.com',
+          subject: 'Hello',
+          text: 'Body'
+        },
+        { env, sgClient, transporter }
+      );
+
+      expect(sgClient.send).toHaveBeenCalled();
+      expect(sgClient.send.mock.calls[0][0].from).toBe('smtp@example.com');
+      expect(transporter.verify).toHaveBeenCalledTimes(1);
+      expect(transporter.sendMail).toHaveBeenCalledTimes(1);
+      expect(result).toEqual({ messageId: 'smtp-id' });
+    });
+
+    it('should fall back to default noreply address when no sender is configured', async () => {
+      const { sendEmail } = getHelperFns();
+      const error = new Error('SendGrid default');
+      error.response = { body: {} };
+      const sgClient = { send: jest.fn().mockRejectedValue(error) };
+      const transporter = {
+        sendMail: jest.fn().mockResolvedValue({ messageId: 'smtp-default' })
+      };
+      const env = {
+        SENDGRID_API_KEY: 'key-101112'
+      };
+
+      await sendEmail(
+        {
+          to: 'user@example.com',
+          subject: 'Hello',
+          text: 'Body'
+        },
+        { env, sgClient, transporter }
+      );
+
+      expect(sgClient.send.mock.calls[0][0].from).toBe('noreply@urlshortener.com');
+    });
+
+    it('should throw when SMTP transporter fails to send', async () => {
+      const { sendEmail } = getHelperFns();
+      const transporter = {
+        sendMail: jest.fn().mockRejectedValue(new Error('SMTP failure'))
+      };
+
+      await expect(
+        sendEmail(
+          {
+            to: 'user@example.com',
+            subject: 'Hello',
+            text: 'Body'
+          },
+          { env: {}, transporter }
+        )
+      ).rejects.toThrow('SMTP failure');
     });
   });
 });

@@ -6,7 +6,8 @@ module.exports = {
     '/node_modules/',
     '/client/',
     '/build/',
-    'node_modules/.*\\.test\\.js$'
+    'node_modules/.*\\.test\\.js$',
+    '/url-shortener/'
   ],
   collectCoverageFrom: [
     'server.js',
@@ -20,7 +21,8 @@ module.exports = {
     '/node_modules/',
     '/client/',
     '/tests/',
-    '/build/'
+    '/build/',
+    '/url-shortener/'
   ],
   coverageDirectory: 'coverage',
   coverageReporters: ['text', 'lcov', 'html', 'json-summary'],
