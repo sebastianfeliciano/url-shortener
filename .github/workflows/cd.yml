@@ -47,7 +47,6 @@ jobs:
   deploy-docker-render:
     name: Build Docker and Deploy to Render
     runs-on: ubuntu-latest
-    if: secrets.DOCKER_USERNAME != '' && secrets.RENDER_API_KEY != ''
     
     steps:
     - name: Checkout code
