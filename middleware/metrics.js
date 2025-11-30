@@ -48,7 +48,9 @@ const activeConnections = new promClient.Gauge({
 // Metrics middleware
 const metricsMiddleware = (req, res, next) => {
   const startTime = Date.now();
-  const route = req.route ? req.route.path : req.path;
+  // Normalize route - use route path if available, otherwise use request path
+  // Remove query strings and normalize
+  const route = req.route ? req.route.path : (req.path || '/');
   const method = req.method;
 
   // Track active connections
@@ -58,18 +60,24 @@ const metricsMiddleware = (req, res, next) => {
   const originalEnd = res.end;
   res.end = function(...args) {
     const duration = (Date.now() - startTime) / 1000; // Convert to seconds
-    const status = res.statusCode;
+    const status = res.statusCode || 200;
+    const statusStr = String(status); // Convert to string for Prometheus labels
     
     // Decrement active connections
     activeConnections.dec();
 
-    // Record metrics
-    httpRequestsTotal.inc({ method, route, status });
-    httpRequestDuration.observe({ method, route, status }, duration);
+    // Record metrics with normalized labels
+    const labels = { method, route, status: statusStr };
+    
+    // Request count metric
+    httpRequestsTotal.inc(labels);
+    
+    // Latency metric (histogram)
+    httpRequestDuration.observe(labels, duration);
 
-    // Track errors (4xx and 5xx status codes)
+    // Error count metric (4xx and 5xx status codes)
     if (status >= 400) {
-      httpErrorsTotal.inc({ method, route, status });
+      httpErrorsTotal.inc(labels);
     }
 
     // Call original end

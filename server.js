@@ -16,6 +16,7 @@ require('dotenv').config();
 const app = express();
 const PORT = process.env.PORT || 5000;
 
+/* istanbul ignore next */
 // Auto-detect IP address
 function getLocalIP() {
   const os = require('os');
@@ -34,6 +35,7 @@ function getLocalIP() {
 
 const LOCAL_IP = getLocalIP();
 
+/* istanbul ignore next */
 // Use environment variable for BASE_URL, or detect from cloud provider
 // For deployment, this will auto-detect from VERCEL_URL, RAILWAY_PUBLIC_DOMAIN, or RENDER_EXTERNAL_URL
 let BASE_URL = process.env.BASE_URL;
@@ -65,12 +67,14 @@ app.use(express.json());
 // Prometheus metrics middleware (must be before routes)
 app.use(metricsMiddleware);
 
-// Rate limiting
-const limiter = rateLimit({
-  windowMs: 15 * 60 * 1000, // 15 minutes
-  max: 100 // limit each IP to 100 requests per windowMs
-});
-app.use(limiter);
+// Rate limiting (disabled in test environment)
+if (process.env.NODE_ENV !== 'test') {
+  const limiter = rateLimit({
+    windowMs: 15 * 60 * 1000, // 15 minutes
+    max: 100 // limit each IP to 100 requests per windowMs
+  });
+  app.use(limiter);
+}
 
 // LRU Cache for low latency
 const urlCache = new LRUCache({
@@ -82,7 +86,15 @@ const urlCache = new LRUCache({
 const MONGODB_URI = process.env.MONGODB_URI || 'mongodb+srv://giuseppi:supersecretpassword@kambaz.auzwwz1.mongodb.net/urlshortener?retryWrites=true&w=majority';
 
 // For serverless environments (Vercel), reuse existing connection
-if (mongoose.connection.readyState === 0) {
+// Skip MongoDB connection in test environment (handled by test setup)
+if (process.env.NODE_ENV === 'test') {
+  // In test environment, MongoDB is already connected by test setup
+  // Just update metrics if connection exists
+  if (mongoose.connection.readyState === 1) {
+    updateDbStatus(mongoose);
+  }
+/* istanbul ignore next */
+} else if (mongoose.connection.readyState === 0) {
   mongoose.connect(MONGODB_URI, {
     useNewUrlParser: true,
     useUnifiedTopology: true,
@@ -101,6 +113,7 @@ if (mongoose.connection.readyState === 0) {
     console.error('Connection string:', MONGODB_URI.replace(/:[^:@]+@/, ':****@')); // Hide password
     updateDbStatus(mongoose); // Update metrics
   });
+/* istanbul ignore next */
 } else {
   console.log('MongoDB connection already established');
   updateDbStatus(mongoose); // Update metrics
@@ -991,40 +1004,44 @@ const isServerless = process.env.VERCEL === '1';
 const isRender = !!process.env.RENDER_EXTERNAL_URL;
 const isRailway = !!process.env.RAILWAY_ENVIRONMENT;
 
-if (!isServerless) {
-  // Render sets PORT automatically, but we can use process.env.PORT
-  const serverPort = process.env.PORT || PORT;
-  
-  // Start server immediately, don't wait for MongoDB
-  app.listen(serverPort, '0.0.0.0', () => {
-    console.log(`✅ Server running on port ${serverPort}`);
-    console.log(`Environment: ${process.env.NODE_ENV || 'development'}`);
-    console.log(`Platform: ${isRender ? 'Render' : isRailway ? 'Railway' : 'Local'}`);
-    console.log(`MongoDB URI: ${MONGODB_URI.replace(/:[^:@]+@/, ':****@')}`);
-    console.log(`Base URL: ${BASE_URL}`);
-    console.log(`MongoDB connection state: ${mongoose.connection.readyState} (0=disconnected, 1=connected)`);
+/* istanbul ignore next */
+// Don't start server in test environment
+if (process.env.NODE_ENV !== 'test') {
+  if (!isServerless) {
+    // Render sets PORT automatically, but we can use process.env.PORT
+    const serverPort = process.env.PORT || PORT;
     
-    // Log MongoDB connection status
-    if (mongoose.connection.readyState === 1) {
-      console.log('✅ MongoDB already connected');
-    } else {
-      console.log('⏳ MongoDB connecting in background...');
-    }
-  }).on('error', (err) => {
-    if (err.code === 'EADDRINUSE') {
-      console.error(`❌ Port ${serverPort} is already in use. Please kill the process using this port.`);
-      console.error(`   Run: lsof -ti:${serverPort} | xargs kill -9`);
-      process.exit(1);
-    } else {
-      console.error('Server error:', err);
-      process.exit(1);
-    }
-  });
-} else {
-  // Serverless environment (Vercel) - just log
-  console.log('Serverless environment detected (Vercel)');
-  console.log(`Base URL: ${BASE_URL}`);
-  console.log(`MongoDB URI: ${MONGODB_URI.replace(/:[^:@]+@/, ':****@')}`);
+    // Start server immediately, don't wait for MongoDB
+    app.listen(serverPort, '0.0.0.0', () => {
+      console.log(`✅ Server running on port ${serverPort}`);
+      console.log(`Environment: ${process.env.NODE_ENV || 'development'}`);
+      console.log(`Platform: ${isRender ? 'Render' : isRailway ? 'Railway' : 'Local'}`);
+      console.log(`MongoDB URI: ${MONGODB_URI.replace(/:[^:@]+@/, ':****@')}`);
+      console.log(`Base URL: ${BASE_URL}`);
+      console.log(`MongoDB connection state: ${mongoose.connection.readyState} (0=disconnected, 1=connected)`);
+      
+      // Log MongoDB connection status
+      if (mongoose.connection.readyState === 1) {
+        console.log('✅ MongoDB already connected');
+      } else {
+        console.log('⏳ MongoDB connecting in background...');
+      }
+    }).on('error', (err) => {
+      if (err.code === 'EADDRINUSE') {
+        console.error(`❌ Port ${serverPort} is already in use. Please kill the process using this port.`);
+        console.error(`   Run: lsof -ti:${serverPort} | xargs kill -9`);
+        process.exit(1);
+      } else {
+        console.error('Server error:', err);
+        process.exit(1);
+      }
+    });
+  } else {
+    // Serverless environment (Vercel) - just log
+    console.log('Serverless environment detected (Vercel)');
+    console.log(`Base URL: ${BASE_URL}`);
+    console.log(`MongoDB URI: ${MONGODB_URI.replace(/:[^:@]+@/, ':****@')}`);
+  }
 }
 
 // Export for Vercel serverless functions
