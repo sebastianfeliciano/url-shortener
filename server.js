@@ -16,7 +16,6 @@ require('dotenv').config();
 const app = express();
 const PORT = process.env.PORT || 5000;
 
-/* istanbul ignore next */
 // Auto-detect IP address
 function getLocalIP() {
   const os = require('os');
@@ -35,7 +34,6 @@ function getLocalIP() {
 
 const LOCAL_IP = getLocalIP();
 
-/* istanbul ignore next */
 // Use environment variable for BASE_URL, or detect from cloud provider
 // For deployment, this will auto-detect from VERCEL_URL, RAILWAY_PUBLIC_DOMAIN, or RENDER_EXTERNAL_URL
 let BASE_URL = process.env.BASE_URL;
@@ -100,7 +98,7 @@ if (process.env.NODE_ENV === 'test') {
   if (isDatabaseConnected()) {
     updateDbStatus(mongoose);
   }
-/* istanbul ignore next */
+
 } else if (dbStatus.get() === 0) {
   mongoose.connect(MONGODB_URI, {
     useNewUrlParser: true,
@@ -120,7 +118,6 @@ if (process.env.NODE_ENV === 'test') {
     console.error('Connection string:', MONGODB_URI.replace(/:[^:@]+@/, ':****@')); // Hide password
     updateDbStatus(mongoose); // Update metrics
   });
-/* istanbul ignore next */
 } else {
   console.log('MongoDB connection already established');
   updateDbStatus(mongoose); // Update metrics
@@ -1015,7 +1012,7 @@ const isServerless = process.env.VERCEL === '1';
 const isRender = !!process.env.RENDER_EXTERNAL_URL;
 const isRailway = !!process.env.RAILWAY_ENVIRONMENT;
 
-/* istanbul ignore next */
+
 // Don't start server in test environment
 if (process.env.NODE_ENV !== 'test') {
   if (!isServerless) {
